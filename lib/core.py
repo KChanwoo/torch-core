@@ -105,3 +105,36 @@ class Core:
                 break
 
         self._scorer.draw_total_result()
+
+    def test(self, test_dataset, batch_size=64, collate_fn=None):
+        train_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True,
+                                      collate_fn=collate_fn if collate_fn is not None else self.__default_collate)
+        device = torch.device(
+            "cuda:0" if torch.has_cuda and torch.cuda.is_available() else "mps" if torch.has_mps and torch.mps.is_available() else "cpu")
+        print("using device：", device)
+        torch.backends.cudnn.benchmark = True
+
+        self._model.eval()  # set network 'val' mode
+
+        # batch loop
+        for inputs, labels in tqdm(train_dataloader):
+
+            # send data to GPU
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
+            # forward
+            with torch.set_grad_enabled(False):
+                outputs = self._model(inputs)
+                loss = self._loss(outputs, labels)
+
+                self._scorer.add_batch_result(outputs, labels, loss)
+
+        self._scorer.get_epoch_result(True, True, True, "test")
+        self._scorer.draw_total_result()
+
+    def load(self, pt_path):
+        self._model.load_state_dict(torch.load(pt_path, map_location="cuda" if torch.has_cuda and torch.cuda.is_available() else "cpu"))
+
+    def save(self, pt_path):
+        torch.save(self._model.state_dict(), pt_path)

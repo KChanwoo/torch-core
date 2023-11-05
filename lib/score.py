@@ -40,13 +40,23 @@ class Scorer(metaclass=ABCMeta):
         self._epoch_loss += batch_loss
 
     @abstractmethod
-    def get_epoch_result(self, draw: bool, is_merged: bool):
+    def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
         epoch_loss = self._epoch_loss / len(self._preds_list)
 
         print('Loss: {:.4f}'.format(epoch_loss))
 
         if is_merged:
             self._loss_list.append(epoch_loss)
+
+        if write:
+            write_path = os.path.join(self._base_path, '{0}.txt'.format(title))
+            with open(write_path, 'w', encoding='utf8') as f:
+                lines = [
+                    "The number of {0} data: {1}\n".format(title, len(self._preds_list)),
+                    "Loss: {0}".format(epoch_loss),
+                ]
+
+                f.writelines(lines)
 
         self.reset_epoch()
         return epoch_loss
@@ -83,13 +93,13 @@ class BinaryScorer(Scorer):
         self._preds_list.extend(preds.tolist())
         self._output_list.extend(reshaped.tolist())
 
-    def get_epoch_result(self, draw: bool, is_merged):
+    def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
         label_squeeze = [int(label_one[0]) for label_one in self._labels_list]
 
         fpr, tpr, _ = roc_curve(label_squeeze, self._output_list)
         if draw:
             plt.plot(fpr, tpr)
-            plt.savefig(os.path.join(self._base_path, "val_roc" + str(self._save_num) + ".png"))
+            plt.savefig(os.path.join(self._base_path, "{0}_roc{1}.png".format(title, self._save_num)))
             plt.close()
             self._save_num += 1
         epoch_corrects = torch.sum(torch.tensor(self._preds_list).cpu() == torch.tensor(label_squeeze).cpu())
@@ -101,6 +111,18 @@ class BinaryScorer(Scorer):
             self._accuracy_list.append(epoch_acc.item())
             self._loss_list.append(epoch_loss)
             self._f1_list.append(epoch_f1)
+
+        if write:
+            write_path = os.path.join(self._base_path, '{0}.txt'.format(title))
+            with open(write_path, 'w', encoding='utf8') as f:
+                lines = [
+                    "The number of {0} data: {1}\n".format(title, len(self._preds_list)),
+                    "Accuracy: {0}\n".format(epoch_acc),
+                    "Loss: {0}\n".format(epoch_loss),
+                    "F1 Score: {0}\n".format(epoch_f1)
+                ]
+
+                f.writelines(lines)
 
         print('Loss: {:.4f} Acc: {:.4f} F1: {:.4f}'.format(epoch_loss, epoch_acc, epoch_f1))
         self.reset_epoch()
@@ -123,7 +145,7 @@ class MulticlassScorer(Scorer):
         self._preds_list.extend(reshaped.tolist())
         self._output_list.extend(outputs.tolist())
 
-    def get_epoch_result(self, draw: bool, is_merged: bool):
+    def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
 
         if isinstance(self._labels_list[0], int):
             # labels are index of classes
@@ -157,6 +179,18 @@ class MulticlassScorer(Scorer):
             self._accuracy_list.append(epoch_acc.item())
             self._loss_list.append(epoch_loss)
             self._f1_list.append(epoch_f1)
+
+        if write:
+            write_path = os.path.join(self._base_path, '{0}.txt'.format(title))
+            with open(write_path, 'w', encoding='utf8') as f:
+                lines = [
+                    "The number of {0} data: {1}\n".format(title, len(self._preds_list)),
+                    "Accuracy: {0}\n".format(epoch_acc),
+                    "Loss: {0}\n".format(epoch_loss),
+                    "F1 Score: {0}\n".format(epoch_f1)
+                ]
+
+                f.writelines(lines)
 
         print('Loss: {:.4f} Acc: {:.4f} F1: {:.4f}'.format(epoch_loss, epoch_acc, epoch_f1))
 

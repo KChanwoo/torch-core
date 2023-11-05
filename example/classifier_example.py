@@ -37,3 +37,4 @@ scorer = MulticlassScorer(".\\result\\classifier", 10)
 core = Core(".\\result\\classifier", model, opt, loss, scorer)
 
 core.train(mnist_train, mnist_test, num_epochs=5)
+core.test(mnist_test)

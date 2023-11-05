@@ -55,4 +55,5 @@ abnormal_train_len = round(len(abnormal.values) * .9)
 train_dataset = ECGDataset(normal.values[:normal_train_len], abnormal.values[:abnormal_train_len])
 val_dataset = ECGDataset(normal.values[normal_train_len: len(normal.values)], abnormal.values[abnormal_train_len: len(abnormal.values)])
 
-core.train(train_dataset, val_dataset)
+core.train(train_dataset, val_dataset, num_epochs=2)
+core.test(val_dataset)
