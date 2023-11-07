@@ -1,23 +1,25 @@
 import os
-from abc import ABCMeta, abstractmethod
 
 import matplotlib
+import numpy as np
 import torch
+
+import lib.core
 
 matplotlib.use('Agg')
 
 from matplotlib import pyplot as plt
-from sklearn.metrics import roc_curve, f1_score
+from sklearn.metrics import roc_curve, f1_score, mean_squared_error
 from torch.nn.functional import one_hot
 
 
-class Scorer(metaclass=ABCMeta):
+class Scorer:
     def __init__(self, base_path):
         self._base_path = base_path
 
         self._accuracy_list = []
         self._loss_list = []
-        self._f1_list = []
+        self._score_list = []
 
         self._epoch_loss = 0.0
         self._labels_list = []
@@ -32,14 +34,12 @@ class Scorer(metaclass=ABCMeta):
         self._preds_list = []
         self._output_list = []
 
-    @abstractmethod
     def add_batch_result(self, outputs, labels, batch_loss):
         self._preds_list.extend(outputs.tolist())
         self._output_list.extend(outputs.tolist())
         self._labels_list.extend(labels.tolist())
         self._epoch_loss += batch_loss
 
-    @abstractmethod
     def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
         epoch_loss = self._epoch_loss / len(self._preds_list)
 
@@ -69,16 +69,16 @@ class Scorer(metaclass=ABCMeta):
 
         ax.plot(range(len(self._loss_list)), self._loss_list, label="loss")
 
-        if len(self._f1_list) > 0:
-            ax.plot(range(len(self._f1_list)), self._f1_list, label="f1")
-        plt.xlim(0, len(self._accuracy_list))
+        if len(self._score_list) > 0:
+            ax.plot(range(len(self._score_list)), self._score_list, label="score")
+        plt.xlim(0, len(self._loss_list))
 
         ax.legend()
         save_fig = os.path.join(self._base_path, 'fig.png')
         plt.savefig(save_fig)
         plt.close()
 
-        return self._loss_list, self._accuracy_list, self._f1_list
+        return self._loss_list, self._accuracy_list, self._score_list
 
 
 class BinaryScorer(Scorer):
@@ -110,7 +110,7 @@ class BinaryScorer(Scorer):
         if is_merged:
             self._accuracy_list.append(epoch_acc.item())
             self._loss_list.append(epoch_loss)
-            self._f1_list.append(epoch_f1)
+            self._score_list.append(epoch_f1)
 
         if write:
             write_path = os.path.join(self._base_path, '{0}.txt'.format(title))
@@ -178,7 +178,7 @@ class MulticlassScorer(Scorer):
         if is_merged:
             self._accuracy_list.append(epoch_acc.item())
             self._loss_list.append(epoch_loss)
-            self._f1_list.append(epoch_f1)
+            self._score_list.append(epoch_f1)
 
         if write:
             write_path = os.path.join(self._base_path, '{0}.txt'.format(title))
@@ -196,3 +196,73 @@ class MulticlassScorer(Scorer):
 
         self.reset_epoch()
         return epoch_loss
+
+
+class MSEScorer(Scorer):
+    def add_batch_result(self, outputs, labels, batch_loss):
+        reshaped = outputs.squeeze()
+        # update loss summation
+        self._epoch_loss += batch_loss.item() * outputs.size(0)
+        # update correct prediction summation
+        self._labels_list.extend(labels.tolist())
+        self._preds_list.extend(reshaped.tolist())
+        self._output_list.extend(outputs.tolist())
+
+    def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
+        label_squeeze = [label_one[0] for label_one in self._labels_list]
+
+        if draw:
+            plt.scatter(label_squeeze, self._preds_list)
+            plt.savefig(os.path.join(self._base_path, "{}_mse{}.png".format(title, self._save_num)))
+            plt.close()
+            self._save_num += 1
+
+        epoch_mse = mean_squared_error(label_squeeze, self._preds_list)
+        epoch_loss = self._epoch_loss / len(self._preds_list)
+
+        if is_merged:
+            self._loss_list.append(epoch_loss)
+            self._score_list.append(epoch_mse)
+
+        if write:
+            write_path = os.path.join(self._base_path, '{0}.txt'.format(title))
+            with open(write_path, 'w', encoding='utf8') as f:
+                lines = [
+                    "The number of {0} data: {1}\n".format(title, len(self._preds_list)),
+                    "Loss: {0}\n".format(epoch_loss),
+                    "MSE Score: {0}\n".format(epoch_mse)
+                ]
+
+                f.writelines(lines)
+
+        print('Loss: {:.4f} MSE: {:.4f}'.format(epoch_loss, epoch_mse))
+        self.reset_epoch()
+
+        return epoch_loss
+
+
+class GanScorer(Scorer):
+    def __init__(self, base_path: str, gan_core, seed_shape: tuple[int, ...]):
+        super().__init__(base_path)
+
+        self._gan_core = gan_core
+        self._seed_shape = seed_shape
+
+    def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
+        if draw:
+            images = self._gan_core.generate(16)
+            plt.figure(figsize=(10, 10))
+            plt.axis('off')
+            for i in range(images.shape[0]):
+                plt.subplot(4, 4, i + 1)
+                image = images[i, :, :, :]
+                image = image.cpu().permute(1, 2, 0).numpy()
+                image = (image-np.min(image))/(np.max(image)-np.min(image))
+                plt.imshow(image)
+
+            plt.savefig(os.path.join(self._base_path, "{}.png".format(str(self._save_num))))
+            plt.close()
+            self._save_num += 1
+
+        self.reset_epoch()
+        return 0

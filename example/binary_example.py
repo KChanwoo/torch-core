@@ -1,3 +1,7 @@
+import os
+
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
 import pandas as pd
 import torch.nn
 from torch.utils.data import Dataset

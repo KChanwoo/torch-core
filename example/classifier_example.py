@@ -1,3 +1,7 @@
+import os
+
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
 import torch.nn
 import torchvision.datasets as dsets
 import torchvision.transforms as transforms
