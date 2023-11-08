@@ -6,7 +6,7 @@ import torch
 
 import lib.core
 
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
 
 from matplotlib import pyplot as plt
 from sklearn.metrics import roc_curve, f1_score, mean_squared_error
@@ -248,6 +248,11 @@ class GanScorer(Scorer):
         self._gan_core = gan_core
         self._seed_shape = seed_shape
 
+    def add_batch_result(self, outputs, labels, batch_loss):
+        self._epoch_loss += batch_loss.item() * outputs.size(0)
+        # update correct prediction summation
+        self._output_list.extend(outputs.tolist())
+
     def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
         if draw:
             images = self._gan_core.generate(16)
@@ -256,13 +261,16 @@ class GanScorer(Scorer):
             for i in range(images.shape[0]):
                 plt.subplot(4, 4, i + 1)
                 image = images[i, :, :, :]
+                image = (image + 1) / 2
+                image = image.clamp(0, 1)
                 image = image.cpu().permute(1, 2, 0).numpy()
-                image = (image-np.min(image))/(np.max(image)-np.min(image))
                 plt.imshow(image)
 
             plt.savefig(os.path.join(self._base_path, "{}.png".format(str(self._save_num))))
             plt.close()
             self._save_num += 1
-
+        if len(self._output_list) > 0:
+            epoch_loss = self._epoch_loss / len(self._output_list)
+            print('Loss: {:.4f}'.format(epoch_loss))
         self.reset_epoch()
         return 0
