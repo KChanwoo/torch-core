@@ -64,6 +64,9 @@ class Core:
 
         return image, label
 
+    def after_epoch_one(self, phase):
+        return self._scorer.get_epoch_result(phase == 'val', phase == 'val')
+
     def train(self, dataset: Dataset, dataset_val: Union[Dataset, None], batch_size=64, num_epochs=1000,
               collate_fn=None):
         train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True,
@@ -113,7 +116,7 @@ class Core:
                     self.__log("{} result:".format(phase))
 
                 with torch.set_grad_enabled(False):
-                    epoch_loss = self._scorer.get_epoch_result(phase == 'val', phase == 'val')
+                    epoch_loss = self.after_epoch_one(phase)
 
                 if phase == 'val':
                     # check early stopping
