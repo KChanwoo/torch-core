@@ -145,9 +145,7 @@ class Core:
 
             # forward
             with torch.set_grad_enabled(False):
-                outputs = self._model(inputs)
-                loss = self._loss(outputs, labels)
-
+                outputs, loss = self.train_step(inputs, labels, False)
                 self._scorer.add_batch_result(outputs, labels, loss)
 
         self._scorer.get_epoch_result(True, True, True, "test")
