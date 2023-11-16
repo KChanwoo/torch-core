@@ -1,5 +1,7 @@
 import os
 
+from module.common import LinearModule
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 import pandas as pd
@@ -41,11 +43,10 @@ class Extractor(torch.nn.Module):
 model = torch.nn.Sequential(
     torch.nn.LSTM(188, 256, bidirectional=True),
     Extractor(),
-    torch.nn.Linear(512, 256),
-    torch.nn.Linear(256, 1),
+    LinearModule(512, 256, activation=torch.nn.ReLU()),
+    LinearModule(256, 1, activation=torch.nn.ReLU()),
     torch.nn.Flatten(1),
-    torch.nn.Linear(1, 1),
-    torch.nn.Sigmoid()
+    LinearModule(1, 1, activation=torch.nn.Softmax())
 )
 
 opt = torch.optim.SGD(params=model.parameters(), lr=1.0e-4)

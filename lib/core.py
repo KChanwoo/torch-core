@@ -31,6 +31,8 @@ class Core:
         if not os.path.exists(base_path):
             os.makedirs(base_path)
 
+        self.save_path = os.path.join(self._base_path, 'weight_train.pt')
+
     def __log(self, *args):
         if self.__verbose:
             print(*args)
@@ -78,9 +80,7 @@ class Core:
             "val": val_dataloader
         }
 
-        save_path = os.path.join(self._base_path, 'weight_train.pt')
-
-        early_stopping = EarlyStopping(patience=10, verbose=True, path=save_path) if self.__early_stopping else None
+        early_stopping = EarlyStopping(patience=10, verbose=True, path=self.save_path) if self.__early_stopping else None
 
         if self._model is not None:
             self._model.to(self._device)
@@ -135,6 +135,8 @@ class Core:
             "cuda:0" if torch.has_cuda and torch.cuda.is_available() else "mps" if torch.has_mps and torch.mps.is_available() else "cpu")
         self.__log("using device：", device)
 
+        self._model.to(device)
+        self._model.load_state_dict(torch.load(self.save_path, map_location=device))
         self._model.eval()  # set network 'val' mode
 
         # batch loop

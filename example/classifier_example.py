@@ -1,5 +1,8 @@
 import os
 
+from module.common import LinearModule
+from module.vision import ConvModule
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 import torch.nn
@@ -21,17 +24,11 @@ mnist_test = dsets.MNIST(root='MNIST_data/',
 
 
 model = torch.nn.Sequential(
-    torch.nn.Conv2d(1, 64, 2),
-    torch.nn.MaxPool2d(4),
-    torch.nn.ReLU(),
-    torch.nn.Conv2d(64, 128, 2),
-    torch.nn.MaxPool2d(4),
-    torch.nn.ReLU(),
-    torch.nn.Conv2d(128, 256, 1),
-    torch.nn.ReLU(),
+    ConvModule(1, 64, 2, pool=torch.nn.MaxPool2d(4), activation=torch.nn.ReLU()),
+    ConvModule(64, 128, 2, pool=torch.nn.MaxPool2d(4), activation=torch.nn.ReLU()),
+    ConvModule(128, 256, 1, activation=torch.nn.ReLU()),
     torch.nn.Flatten(),
-    torch.nn.Linear(256, 10),
-    torch.nn.Softmax()
+    LinearModule(256, 10, activation=torch.nn.Softmax())
 )
 
 opt = torch.optim.Adam(model.parameters(), lr=1.0e-4)
