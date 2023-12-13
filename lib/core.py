@@ -120,7 +120,7 @@ class Core:
 
                 if phase == 'val':
                     # check early stopping
-                    early_stopping(epoch_loss, self._model) if early_stopping is not None and self._model is not None else 0
+                    early_stopping(epoch_loss, self._model) if early_stopping is not None and self._model is not None else torch.save(self._model, self.save_path)
 
             if early_stopping is not None and early_stopping.early_stop:
                 self.__log("Early stopping")
@@ -132,7 +132,7 @@ class Core:
         train_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True,
                                       collate_fn=collate_fn if collate_fn is not None else self._default_collate)
         device = torch.device(
-            "cuda:0" if torch.has_cuda and torch.cuda.is_available() else "mps" if torch.has_mps and torch.mps.is_available() else "cpu")
+            "cuda:0" if torch.backends.cuda.is_built() else "mps" if torch.backends.mps.is_built() else "cpu")
         self.__log("using device：", device)
 
         self._model.to(device)
@@ -197,7 +197,7 @@ class GanCore(Core):
         super().__init__(base_path, None, gan_optim, gan_loss, scorer, early_stopping=False)
 
     @staticmethod
-    def __flip_coin(chance=.5):
+    def flip_coin(chance=.5):
         return np.random.binomial(1, chance)
 
     def create_real_label(self, num_batch):

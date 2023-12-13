@@ -2,7 +2,7 @@ from torch import nn
 
 
 class ConvModule(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=1, stride=1, padding=1, bias=True,
+    def __init__(self, in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=True,
                  pool: nn.Module = None, activation: nn.Module = None, bn=True, dim=2):
         """
         Convolution Layer with pool or activation
