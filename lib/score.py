@@ -1,16 +1,12 @@
 import os
 
-import matplotlib
-import numpy as np
 import torch
-
-import lib.core
-
-# matplotlib.use('Agg')
-
 from matplotlib import pyplot as plt
 from sklearn.metrics import roc_curve, f1_score, mean_squared_error
 from torch.nn.functional import one_hot
+
+
+# matplotlib.use('Agg')
 
 
 class Scorer:
