@@ -23,7 +23,7 @@ class Core:
         self._loss = loss
         self._scorer = scorer if scorer is not None else Scorer(self._base_path)
         self._device = torch.device(
-            "cuda:0" if torch.has_cuda and torch.cuda.is_available() else "mps" if torch.has_mps and torch.mps.is_available() else "cpu")
+            "cuda:0" if torch.backends.cuda.is_built() else "mps" if torch.backends.mps.is_built() else "cpu")
 
         self.__verbose = verbose
 
@@ -131,19 +131,17 @@ class Core:
     def test(self, test_dataset, batch_size=64, collate_fn=None):
         train_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True,
                                       collate_fn=collate_fn if collate_fn is not None else self._default_collate)
-        device = torch.device(
-            "cuda:0" if torch.backends.cuda.is_built() else "mps" if torch.backends.mps.is_built() else "cpu")
-        self.__log("using device：", device)
+        self.__log("using device：", self._device)
 
-        self._model.to(device)
-        self._model.load_state_dict(torch.load(self.save_path, map_location=device))
+        self._model.to(self._device)
+        self.load(self.save_path)
         self._model.eval()  # set network 'val' mode
 
         # batch loop
         for inputs, labels in tqdm(train_dataloader):
             # send data to GPU
-            inputs = inputs.to(device)
-            labels = labels.to(device)
+            inputs = inputs.to(self._device)
+            labels = labels.to(self._device)
 
             # forward
             with torch.set_grad_enabled(False):
@@ -155,7 +153,7 @@ class Core:
 
     def load(self, pt_path):
         self._model.load_state_dict(
-            torch.load(pt_path, map_location="cuda" if torch.has_cuda and torch.cuda.is_available() else "cpu"))
+            torch.load(pt_path, map_location=self._device))
 
     def save(self, pt_path):
         torch.save(self._model.state_dict(), pt_path)
@@ -216,7 +214,7 @@ class GanCore(Core):
 
         self._model_g.get_model().eval()
 
-        if GanCore.__flip_coin():
+        if GanCore.flip_coin():
             data = inputs
             label = self.create_real_label(num_batch)
         else:
@@ -226,7 +224,7 @@ class GanCore(Core):
         self._model_d.get_model().train()
         self._model_d.train_step(data, label, train)
 
-        if GanCore.__flip_coin(.9):
+        if GanCore.flip_coin(.9):
             label_gan = self.create_real_label(num_batch)
         else:
             label_gan = self.create_fake_label(num_batch)

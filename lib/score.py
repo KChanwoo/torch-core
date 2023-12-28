@@ -127,9 +127,8 @@ class BinaryScorer(Scorer):
 
 class MulticlassScorer(Scorer):
 
-    def __init__(self, base_path, n_class: int):
+    def __init__(self, base_path):
         super().__init__(base_path)
-        self.n_class = n_class
 
     def add_batch_result(self, outputs, labels, batch_loss):
         reshaped = torch.argmax(outputs, 1)
@@ -141,14 +140,14 @@ class MulticlassScorer(Scorer):
         self._output_list.extend(outputs.tolist())
 
     def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
-
+        n_class = len(self._output_list[0])
         if isinstance(self._labels_list[0], int):
             # labels are index of classes
-            labels_total = one_hot(torch.tensor(self._labels_list), num_classes=self.n_class).tolist()
+            labels_total = one_hot(torch.tensor(self._labels_list), num_classes=n_class).tolist()
         else:
             labels_total = self._labels_list
 
-        for i in range(self.n_class):
+        for i in range(n_class):
 
             labels = [label_one[i] for label_one in labels_total]
             outputs = [output_one[i] for output_one in self._output_list]
@@ -165,7 +164,7 @@ class MulticlassScorer(Scorer):
             self._save_num += 1
 
         epoch_corrects = torch.sum(torch.tensor(self._preds_list).cpu() == torch.tensor(self._labels_list).cpu())
-        preds_total = one_hot(torch.tensor(self._preds_list), num_classes=self.n_class).tolist()
+        preds_total = one_hot(torch.tensor(self._preds_list), num_classes=n_class).tolist()
         epoch_f1 = f1_score(labels_total, preds_total, average='weighted')
         epoch_loss = self._epoch_loss / len(self._preds_list)
         epoch_acc = epoch_corrects.double() / len(self._preds_list)

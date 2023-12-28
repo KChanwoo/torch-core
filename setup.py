@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='torch-core',
-    version='0.2',
+    version='0.3',
     description='main core of machine learning module by Chanwoo Gwon',
     author='Chanwoo Gwon',
     author_email='arknell@yonsei.ac.kr',
@@ -10,7 +10,7 @@ setup(
     install_requires=[
         "torch",
         "timm",
-        "sklearn",
+        "scikit-learn",
         "matplotlib",
         "pandas",
         "torchvision",
