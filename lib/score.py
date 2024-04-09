@@ -10,7 +10,7 @@ from torch.nn.functional import one_hot
 
 
 class Scorer:
-    def __init__(self, base_path):
+    def __init__(self, base_path, show=False):
         self._base_path = base_path
 
         self._accuracy_list = []
@@ -23,6 +23,14 @@ class Scorer:
         self._output_list = []
 
         self._save_num = 0
+        self._show = show
+
+    def show(self, plt, path):
+        if self._show:
+            plt.imshow()
+        else:
+            plt.savefig(path)
+        plt.close()
 
     def reset_epoch(self):
         self._epoch_loss = 0.0
@@ -35,6 +43,8 @@ class Scorer:
         self._output_list.extend(outputs.tolist())
         self._labels_list.extend(labels.tolist())
         self._epoch_loss += batch_loss
+
+        return self._epoch_loss / len(self._output_list)
 
     def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
         epoch_loss = self._epoch_loss / len(self._preds_list)
@@ -71,8 +81,7 @@ class Scorer:
 
         ax.legend()
         save_fig = os.path.join(self._base_path, 'fig.png')
-        plt.savefig(save_fig)
-        plt.close()
+        self.show(plt, save_fig)
 
         return self._loss_list, self._accuracy_list, self._score_list
 
@@ -88,14 +97,15 @@ class BinaryScorer(Scorer):
         self._preds_list.extend(preds.tolist())
         self._output_list.extend(reshaped.tolist())
 
+        return self._epoch_loss / len(self._output_list)
+
     def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
         label_squeeze = [int(label_one[0]) for label_one in self._labels_list]
 
         fpr, tpr, _ = roc_curve(label_squeeze, self._output_list)
         if draw:
             plt.plot(fpr, tpr)
-            plt.savefig(os.path.join(self._base_path, "{0}_roc{1}.png".format(title, self._save_num)))
-            plt.close()
+            self.show(plt, os.path.join(self._base_path, "{0}_roc{1}.png".format(title, self._save_num)))
             self._save_num += 1
         epoch_corrects = torch.sum(torch.tensor(self._preds_list).cpu() == torch.tensor(label_squeeze).cpu())
         epoch_f1 = f1_score(self._labels_list, self._preds_list)
@@ -127,8 +137,8 @@ class BinaryScorer(Scorer):
 
 class MulticlassScorer(Scorer):
 
-    def __init__(self, base_path):
-        super().__init__(base_path)
+    def __init__(self, base_path, show=False):
+        super().__init__(base_path, show)
 
     def add_batch_result(self, outputs, labels, batch_loss):
         reshaped = torch.argmax(outputs, 1)
@@ -138,6 +148,8 @@ class MulticlassScorer(Scorer):
         self._labels_list.extend(labels.tolist())
         self._preds_list.extend(reshaped.tolist())
         self._output_list.extend(outputs.tolist())
+
+        return self._epoch_loss / len(self._output_list)
 
     def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
         n_class = len(self._output_list[0])
@@ -159,8 +171,7 @@ class MulticlassScorer(Scorer):
 
         if draw:
             plt.legend()
-            plt.savefig(os.path.join(self._base_path, "val_roc" + str(self._save_num) + ".png"))
-            plt.close()
+            self.show(plt, os.path.join(self._base_path, "val_roc" + str(self._save_num) + ".png"))
             self._save_num += 1
 
         epoch_corrects = torch.sum(torch.tensor(self._preds_list).cpu() == torch.tensor(self._labels_list).cpu())
@@ -202,13 +213,14 @@ class MSEScorer(Scorer):
         self._preds_list.extend(reshaped.tolist())
         self._output_list.extend(outputs.tolist())
 
+        return self._epoch_loss / len(self._output_list)
+
     def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
         label_squeeze = [label_one[0] for label_one in self._labels_list]
 
         if draw:
             plt.scatter(label_squeeze, self._preds_list)
-            plt.savefig(os.path.join(self._base_path, "{}_mse{}.png".format(title, self._save_num)))
-            plt.close()
+            self.show(plt, os.path.join(self._base_path, "{}_mse{}.png".format(title, self._save_num)))
             self._save_num += 1
 
         epoch_mse = mean_squared_error(label_squeeze, self._preds_list)
@@ -236,8 +248,8 @@ class MSEScorer(Scorer):
 
 
 class GanScorer(Scorer):
-    def __init__(self, base_path: str, gan_core, seed_shape: tuple[int, ...]):
-        super().__init__(base_path)
+    def __init__(self, base_path: str, gan_core, seed_shape: tuple[int, ...], show=False):
+        super().__init__(base_path, show)
 
         self._gan_core = gan_core
         self._seed_shape = seed_shape
@@ -246,6 +258,8 @@ class GanScorer(Scorer):
         self._epoch_loss += batch_loss.item() * outputs.size(0)
         # update correct prediction summation
         self._output_list.extend(outputs.tolist())
+
+        return self._epoch_loss / len(self._output_list)
 
     def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
         if draw:
@@ -260,8 +274,7 @@ class GanScorer(Scorer):
                 image = image.cpu().permute(1, 2, 0).numpy()
                 plt.imshow(image)
 
-            plt.savefig(os.path.join(self._base_path, "{}.png".format(str(self._save_num))))
-            plt.close()
+            self.show(plt, os.path.join(self._base_path, "{}.png".format(str(self._save_num))))
             self._save_num += 1
         if len(self._output_list) > 0:
             epoch_loss = self._epoch_loss / len(self._output_list)
