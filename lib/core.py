@@ -179,13 +179,9 @@ class Core:
 
                         model.eval()  # set network 'val' mode
 
-                # Before training
-                if (epoch == 0) and train:
-                    continue
-
                 data_loader = dataloaders_dict[phase]
 
-                self.__log("{0} Start", phase)
+                self.__log("{0} Start".format(phase))
                 if data_loader is not None:
                     # batch loop
                     with tqdm(data_loader, disable=not is_main) as pbar:
