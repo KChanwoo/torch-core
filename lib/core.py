@@ -186,7 +186,7 @@ class Core:
                 data_loader = dataloaders_dict[phase]
                 if data_loader is not None:
                     # batch loop
-                    with tqdm(dataloaders_dict[phase], disable=not is_main) as pbar:
+                    with tqdm(dataloaders_dict[phase]) as pbar:
                         pbar.set_description(f'Epoch: {epoch}')
                         for inputs, labels in pbar:
                             inputs = inputs.to(device_id)
