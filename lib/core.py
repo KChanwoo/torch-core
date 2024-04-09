@@ -174,6 +174,9 @@ class Core:
                     if train:
                         model.train()  # set network 'train' mode
                     else:
+                        if not is_main:
+                            continue
+
                         model.eval()  # set network 'val' mode
 
                 # Before training
@@ -207,7 +210,8 @@ class Core:
                 if not train and is_main:
                     # check early stopping
                     early_stopping(epoch_loss, model) if early_stopping is not None and model is not None else torch.save(model.module, self.save_path)
-                elif self._scheduler is not None:
+
+                if train and self._scheduler is not None:
                     self._scheduler.step()
 
             sync_early_stop = torch.ones(1, device=device_id) if early_stopping.early_stop else torch.zeros(1, device=device_id)
