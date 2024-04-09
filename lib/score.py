@@ -88,7 +88,7 @@ class Scorer:
 
 class BinaryScorer(Scorer):
     def add_batch_result(self, outputs, labels, batch_loss):
-        reshaped = outputs.squeeze()
+        reshaped = outputs.squeeze(1)
         preds = (reshaped > 0.5).float().cpu()
         # update loss summation
         self._epoch_loss += batch_loss.item() * outputs.size(0)
