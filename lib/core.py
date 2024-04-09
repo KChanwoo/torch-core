@@ -207,11 +207,12 @@ class Core:
                     # check early stopping
                     early_stopping(epoch_loss, model) if early_stopping is not None and model is not None else torch.save(model.module, self.save_path)
 
+                if not train:
                     self.__log("Check Early stopping")
                     sync_early_stop = torch.tensor(1 if early_stopping.early_stop else 0)
                     # synchronize variable for early stop to all devices
-                    dist.broadcast(sync_early_stop, 0)
-                    if early_stopping is not None and sync_early_stop != 0:
+                    dist.all_reduce(sync_early_stop, op=dist.ReduceOp.SUM)
+                    if sync_early_stop != 0:
                         self.__log("Early stopping")
                         break
 
