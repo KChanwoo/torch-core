@@ -39,12 +39,12 @@ class Core:
         if self.__verbose:
             print(*args)
 
-    def train_step(self, inputs, labels, train=False):
+    def train_step(self, model, inputs, labels, train=False):
         # initialize optimizer
         if train:
             self._optimizer.zero_grad()
 
-        outputs = self._model(inputs)
+        outputs = model(inputs)
         loss = self._loss(outputs, labels)  # calculate loss
 
         if train:
@@ -113,7 +113,7 @@ class Core:
 
                             # forward
                             with torch.set_grad_enabled(train):
-                                outputs, loss = self.train_step(inputs, labels, train)
+                                outputs, loss = self.train_step(self._model, inputs, labels, train)
                                 # _, preds = torch.max(reshaped, 1)  # predict
                                 # back propagtion
 
@@ -187,7 +187,7 @@ class Core:
 
                             # forward
                             with torch.set_grad_enabled(train):
-                                outputs, loss = self.train_step(inputs, labels, train)
+                                outputs, loss = self.train_step(model, inputs, labels, train)
                                 # _, preds = torch.max(reshaped, 1)  # predict
                                 # back propagtion
 
@@ -229,7 +229,7 @@ class Core:
 
             # forward
             with torch.set_grad_enabled(False):
-                outputs, loss = self.train_step(inputs, labels, False)
+                outputs, loss = self.train_step(self._model, inputs, labels, False)
                 self._scorer.add_batch_result(outputs, labels, loss)
 
         self._scorer.get_epoch_result(True, True, True, "test")
@@ -291,7 +291,7 @@ class GanCore(Core):
     def create_seed(self, num_batch):
         return torch.randn(num_batch, *self._seed_shape, device=self._device, dtype=torch.float32)
 
-    def train_step(self, inputs, labels, train=False):
+    def train_step(self, model, inputs, labels, train=False):
         num_batch = inputs.shape[0]
         seed = self.create_seed(num_batch)
         data_gan = self._model_g(seed)
@@ -306,7 +306,7 @@ class GanCore(Core):
             label = self.create_fake_label(num_batch)
 
         self._model_d.get_model().train()
-        self._model_d.train_step(data, label, train)
+        self._model_d.train_step(self._model_d, data, label, train)
 
         if GanCore.flip_coin(.9):
             label_gan = self.create_real_label(num_batch)
@@ -316,7 +316,7 @@ class GanCore(Core):
         if train:
             self._model_g.get_model().zero_grad()
 
-        outputs, loss = self._model_d.train_step(data_gan, label_gan, False)
+        outputs, loss = self._model_d.train_step(self._model_d, data_gan, label_gan, False)
         loss = self._loss(outputs, label_gan)
 
         if train:
