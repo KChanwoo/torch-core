@@ -185,7 +185,7 @@ class Core:
                 self.__log("{0} Start".format(phase))
                 if data_loader is not None:
                     # batch loop
-                    with tqdm(data_loader, disable=not is_main) as pbar:
+                    with tqdm(data_loader) as pbar:
                         pbar.set_description(f'Epoch: {epoch}')
                         for inputs, labels in pbar:
                             inputs = inputs.to(device_id)
