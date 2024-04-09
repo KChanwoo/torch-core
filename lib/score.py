@@ -27,7 +27,7 @@ class Scorer:
 
     def show(self, plt, path):
         if self._show:
-            plt.imshow()
+            plt.show()
         else:
             plt.savefig(path)
         plt.close()
