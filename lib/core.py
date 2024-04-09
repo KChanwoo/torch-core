@@ -165,21 +165,22 @@ class Core:
             self.__log("using device：", self._device)
 
         for epoch in range(num_epochs + 1):
+
             if is_main:
                 self.__log('Epoch {}/{}'.format(epoch, num_epochs))
                 self.__log('-------------')
             for phase in [key for key in dataloaders_dict.keys()]:
                 train = phase == 'train'
+                data_loader = dataloaders_dict[phase]
                 if model is not None:
                     if train:
                         model.train()  # set network 'train' mode
+                        data_loader.sampler.set_epoch(epoch)
                     else:
                         if not is_main:
                             continue
 
                         model.eval()  # set network 'val' mode
-
-                data_loader = dataloaders_dict[phase]
 
                 self.__log("{0} Start".format(phase))
                 if data_loader is not None:
