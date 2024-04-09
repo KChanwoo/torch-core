@@ -131,9 +131,9 @@ class Core:
                 elif self._scheduler is not None:
                     self._scheduler.step()
 
-            if early_stopping is not None and early_stopping.early_stop:
-                self.__log("Early stopping")
-                break
+                if not train and early_stopping is not None and early_stopping.early_stop:
+                    self.__log("Early stopping")
+                    break
 
         self._scorer.draw_total_result()
 
@@ -212,13 +212,14 @@ class Core:
                 if train and self._scheduler is not None:
                     self._scheduler.step()
 
-            self.__log("Check Early stopping")
-            sync_early_stop = torch.ones(1, device=device_id) if early_stopping.early_stop else torch.zeros(1, device=device_id)
-            # synchronize variable for early stop to all devices
-            dist.all_reduce(sync_early_stop, op=dist.ReduceOp.SUM)
-            if early_stopping is not None and sync_early_stop != 0:
-                self.__log("Early stopping")
-                break
+                if not train:
+                    self.__log("Check Early stopping")
+                    sync_early_stop = torch.ones(1, device=device_id) if early_stopping.early_stop else torch.zeros(1, device=device_id)
+                    # synchronize variable for early stop to all devices
+                    dist.all_reduce(sync_early_stop, op=dist.ReduceOp.SUM)
+                    if early_stopping is not None and sync_early_stop != 0:
+                        self.__log("Early stopping")
+                        break
 
         self._scorer.draw_total_result()
 
