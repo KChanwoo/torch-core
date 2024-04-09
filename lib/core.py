@@ -177,13 +177,10 @@ class Core:
                         model.train()  # set network 'train' mode
                         data_loader.sampler.set_epoch(epoch)
                     else:
-                        if not is_main:
-                            continue
-
                         model.eval()  # set network 'val' mode
 
                 self.__log("{0} Start".format(phase))
-                if data_loader is not None:
+                if data_loader is not None and (train or is_main):
                     # batch loop
                     with tqdm(data_loader) as pbar:
                         pbar.set_description(f'Epoch: {epoch}')
@@ -210,16 +207,16 @@ class Core:
                     # check early stopping
                     early_stopping(epoch_loss, model) if early_stopping is not None and model is not None else torch.save(model.module, self.save_path)
 
+                    self.__log("Check Early stopping")
+                    sync_early_stop = torch.tensor(1 if early_stopping.early_stop else 0)
+                    # synchronize variable for early stop to all devices
+                    dist.broadcast(sync_early_stop, 0)
+                    if early_stopping is not None and sync_early_stop != 0:
+                        self.__log("Early stopping")
+                        break
+
                 if train and self._scheduler is not None:
                     self._scheduler.step()
-
-                self.__log("Check Early stopping")
-                sync_early_stop = torch.ones(1, device=device_id) if early_stopping.early_stop else torch.zeros(1, device=device_id)
-                # synchronize variable for early stop to all devices
-                dist.all_reduce(sync_early_stop, op=dist.ReduceOp.SUM)
-                if early_stopping is not None and sync_early_stop != 0:
-                    self.__log("Early stopping")
-                    break
 
         self._scorer.draw_total_result()
 
