@@ -29,8 +29,6 @@ class Core:
             "cuda:0" if torch.backends.cuda.is_built() else "mps" if torch.backends.mps.is_built() else "cpu")
 
         self.__verbose = verbose
-
-        self.__log("using device：", self._device)
         if not os.path.exists(base_path):
             os.makedirs(base_path)
 
@@ -88,6 +86,7 @@ class Core:
         if self._model is not None:
             self._model.to(self._device)
 
+        self.__log("using device：", self._device)
         for epoch in range(num_epochs + 1):
             self.__log('Epoch {}/{}'.format(epoch, num_epochs))
             self.__log('-------------')
@@ -162,9 +161,13 @@ class Core:
             self._model.to(device_id)
             model = DDP(self._model, device_ids=[device_id])
 
+        if is_main:
+            self.__log("using device：", self._device)
+
         for epoch in range(num_epochs + 1):
-            self.__log('Epoch {}/{}'.format(epoch, num_epochs))
-            self.__log('-------------')
+            if is_main:
+                self.__log('Epoch {}/{}'.format(epoch, num_epochs))
+                self.__log('-------------')
             for phase in [key for key in dataloaders_dict.keys()]:
                 train = phase == 'train'
                 if model is not None:
