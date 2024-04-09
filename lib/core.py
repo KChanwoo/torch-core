@@ -184,9 +184,11 @@ class Core:
                     continue
 
                 data_loader = dataloaders_dict[phase]
+
+                self.__log("{0} Start", phase)
                 if data_loader is not None:
                     # batch loop
-                    with tqdm(dataloaders_dict[phase]) as pbar:
+                    with tqdm(data_loader, disable=not is_main) as pbar:
                         pbar.set_description(f'Epoch: {epoch}')
                         for inputs, labels in pbar:
                             inputs = inputs.to(device_id)
@@ -214,6 +216,7 @@ class Core:
                 if train and self._scheduler is not None:
                     self._scheduler.step()
 
+            self.__log("Check Early stopping")
             sync_early_stop = torch.ones(1, device=device_id) if early_stopping.early_stop else torch.zeros(1, device=device_id)
             # synchronize variable for early stop to all devices
             dist.all_reduce(sync_early_stop, op=dist.ReduceOp.SUM)
