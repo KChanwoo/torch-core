@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from lib.EarlyStopping import EarlyStopping
 from lib.score import Scorer, GanScorer
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 
 class Core:
@@ -155,19 +156,21 @@ class Core:
 
         early_stopping = EarlyStopping(patience=10, verbose=True, path=self.save_path) if self.__early_stopping else None
 
+        model = None
         if self._model is not None:
             self._model.to(device_id)
+            model = DDP(self._model, device_ids=[device_id])
 
         for epoch in range(num_epochs + 1):
             self.__log('Epoch {}/{}'.format(epoch, num_epochs))
             self.__log('-------------')
             for phase in [key for key in dataloaders_dict.keys()]:
                 train = phase == 'train'
-                if self._model is not None:
+                if model is not None:
                     if train:
-                        self._model.train()  # set network 'train' mode
+                        model.train()  # set network 'train' mode
                     else:
-                        self._model.eval()  # set network 'val' mode
+                        model.eval()  # set network 'val' mode
 
                 # Before training
                 if (epoch == 0) and train:
@@ -199,7 +202,7 @@ class Core:
 
                 if not train:
                     # check early stopping
-                    early_stopping(epoch_loss, self._model) if early_stopping is not None and self._model is not None else torch.save(self._model, self.save_path)
+                    early_stopping(epoch_loss, model) if early_stopping is not None and model is not None else torch.save(model.module, self.save_path)
                 elif self._scheduler is not None:
                     self._scheduler.step()
 
