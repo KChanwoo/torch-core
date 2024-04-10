@@ -171,6 +171,9 @@ class Core:
                 self.__log('Epoch {}/{}'.format(epoch, num_epochs))
                 self.__log('-------------')
             for phase in [key for key in dataloaders_dict.keys()]:
+                if sync_early_stop != 0:
+                    break
+
                 train = phase == 'train'
                 data_loader = dataloaders_dict[phase]
                 if model is not None:
