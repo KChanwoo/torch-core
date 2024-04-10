@@ -167,6 +167,7 @@ class Core:
         sync_early_stop = torch.tensor(0, device=device_id)
         print(rank, "Start epochs")
         for epoch in range(num_epochs + 1):
+            dist.barrier()
 
             if is_main:
                 self.__log('Epoch {}/{}'.format(epoch, num_epochs))
