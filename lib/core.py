@@ -209,6 +209,7 @@ class Core:
                 if not train:
                     self.__log("Check Early stopping")
                     sync_early_stop = torch.tensor(1 if early_stopping.early_stop else 0, device=device_id)
+                    print(rank, sync_early_stop, early_stopping.early_stop)
                     # synchronize variable for early stop to all devices
                     dist.all_reduce(sync_early_stop, op=dist.ReduceOp.SUM)
                     print(rank, sync_early_stop, early_stopping.early_stop)
