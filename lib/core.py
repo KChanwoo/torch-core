@@ -188,6 +188,8 @@ class Core:
                     with tqdm(data_loader, disable=not is_main) as pbar:
                         pbar.set_description(f'Epoch: {epoch}')
                         for inputs, labels in pbar:
+                            if sync_early_stop != 0:
+                                break
                             inputs = inputs.to(device_id)
                             labels = labels.to(device_id)
 
