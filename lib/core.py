@@ -164,6 +164,7 @@ class Core:
         if is_main:
             self.__log("using device：", self._device)
 
+        sync_early_stop = torch.tensor(0, device=device_id)
         for epoch in range(num_epochs + 1):
 
             if is_main:
@@ -202,23 +203,22 @@ class Core:
                     if is_main:
                         epoch_loss = self.after_epoch_one(phase)
 
-                sync_early_stop = torch.tensor(0, device=device_id)
+                if train and self._scheduler is not None:
+                    self._scheduler.step()
+
                 if not train and is_main:
                     # check early stopping
                     early_stopping(epoch_loss, model) if early_stopping is not None and model is not None else torch.save(model.module, self.save_path)
 
                     sync_early_stop = torch.tensor(1 if early_stopping.early_stop else 0, device=device_id)
                     # synchronize variable for early stop to all devices
-                    dist.broadcast(sync_early_stop, 0)
+                    dist.broadcast(sync_early_stop, device_id)
 
-                print(rank, sync_early_stop, early_stopping.early_stop)
+            print(rank, sync_early_stop, early_stopping.early_stop)
 
-                if sync_early_stop != 0:
-                    self.__log("Early stopping")
-                    break
-
-                if train and self._scheduler is not None:
-                    self._scheduler.step()
+            if sync_early_stop != 0:
+                self.__log("Early stopping")
+                break
 
         self._scorer.draw_total_result()
 
