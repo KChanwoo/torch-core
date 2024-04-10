@@ -187,6 +187,7 @@ class Core:
                     # batch loop
                     with tqdm(data_loader, disable=not is_main) as pbar:
                         pbar.set_description(f'Epoch: {epoch}')
+                        print(rank, sync_early_stop, early_stopping.early_stop)
                         for inputs, labels in pbar:
                             if sync_early_stop != 0:
                                 break
@@ -218,8 +219,6 @@ class Core:
                     sync_early_stop = torch.tensor(1 if early_stopping.early_stop else 0, device=device_id)
                     # synchronize variable for early stop to all devices
                     dist.broadcast(sync_early_stop, device_id)
-
-            print(rank, sync_early_stop, early_stopping.early_stop)
 
             if sync_early_stop != 0:
                 self.__log("Early stopping")
