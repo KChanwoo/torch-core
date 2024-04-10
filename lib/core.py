@@ -219,6 +219,7 @@ class Core:
                     # synchronize variable for early stop to all devices
                     dist.broadcast(sync_early_stop, device_id)
 
+                print(rank, "is call barrier")
                 dist.barrier()
 
             if sync_early_stop != 0:
