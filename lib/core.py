@@ -221,6 +221,7 @@ class Core:
 
             if sync_early_stop != 0:
                 self.__log("Early stopping")
+                dist.barrier()
                 break
 
         self._scorer.draw_total_result()
