@@ -154,7 +154,7 @@ class Core:
             "val": val_dataloader
         }
 
-        early_stopping = EarlyStopping(patience=10, verbose=True, path=self.save_path) if self.__early_stopping else None
+        early_stopping = EarlyStopping(patience=5, verbose=True, path=self.save_path) if self.__early_stopping else None
 
         model = None
         if self._model is not None:
