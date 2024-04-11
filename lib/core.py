@@ -197,7 +197,8 @@ class Core:
 
                             # forward
                             with torch.set_grad_enabled(train):
-                                outputs, loss = self.train_step(model, inputs, labels, train)
+                                local_model = model if train else model.module
+                                outputs, loss = self.train_step(local_model, inputs, labels, train)
                                 # _, preds = torch.max(reshaped, 1)  # predict
                                 # back propagtion
 
