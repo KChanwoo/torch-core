@@ -201,9 +201,9 @@ class Core:
                                 # back propagtion
 
                                 if train:
-                                    output_list = []
-                                    label_list = []
-                                    loss_list = []
+                                    output_list = [torch.zeros_like(outputs) for _ in range(world_size)] if is_main else None
+                                    label_list = [torch.zeros_like(labels) for _ in range(world_size)] if is_main else None
+                                    loss_list = [torch.zeros_like(loss) for _ in range(world_size)] if is_main else None
 
                                     dist.gather(outputs, output_list)
                                     dist.gather(labels, label_list)
