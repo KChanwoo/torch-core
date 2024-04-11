@@ -166,9 +166,7 @@ class Core:
             self.__log("using device：", self._device)
 
         sync_early_stop = torch.tensor(0, device=device_id)
-        print(rank, "Start epochs")
         for epoch in range(num_epochs + 1):
-            print(rank, "Start epochs {}".format(epoch))
             if is_main:
                 self.__log('Epoch {}/{}'.format(epoch, num_epochs))
                 self.__log('-------------')
@@ -202,17 +200,18 @@ class Core:
                                 # _, preds = torch.max(reshaped, 1)  # predict
                                 # back propagtion
 
-                                # output_list = []
-                                # label_list = []
-                                # loss_list = []
-                                #
-                                # dist.all_gather(outputs, output_list)
-                                # dist.all_gather(labels, label_list)
-                                # dist.all_gather(loss, loss_list)
-                                #
-                                # outputs = torch.concatenate(output_list, dim=0)
-                                # labels = torch.concatenate(label_list, dim=0)
-                                # loss = torch.concatenate(loss_list, dim=0)
+                                if train:
+                                    output_list = []
+                                    label_list = []
+                                    loss_list = []
+
+                                    dist.all_gather(outputs, output_list)
+                                    dist.all_gather(labels, label_list)
+                                    dist.all_gather(loss, loss_list)
+
+                                    outputs = torch.concatenate(output_list, dim=0)
+                                    labels = torch.concatenate(label_list, dim=0)
+                                    loss = torch.concatenate(loss_list, dim=0)
 
                                 iter_loss = self._scorer.add_batch_result(outputs, labels, loss) if is_main else 0
 
@@ -234,10 +233,6 @@ class Core:
 
             # synchronize variable for early stop to all devices
             dist.broadcast(sync_early_stop, 0)
-
-            # print(epoch, rank, "will call barrier")
-            # dist.barrier()
-            # print(epoch, rank, "called barrier")
 
             if sync_early_stop != 0:
                 self.__log("Early stopping")
