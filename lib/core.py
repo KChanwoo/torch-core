@@ -231,8 +231,9 @@ class Core:
                 early_stopping(epoch_loss, model.module) if early_stopping is not None and model is not None else torch.save(model.module, self.save_path)
 
                 sync_early_stop = torch.tensor(1 if early_stopping.early_stop else 0, device=device_id)
-                # synchronize variable for early stop to all devices
-                dist.broadcast(sync_early_stop, device_id)
+
+            # synchronize variable for early stop to all devices
+            dist.broadcast(sync_early_stop, 0)
 
             # print(epoch, rank, "will call barrier")
             # dist.barrier()
