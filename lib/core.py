@@ -142,6 +142,8 @@ class Core:
         device_id = rank % world_size
         is_main = rank == 0
 
+        self.__verbose = self.__verbose and is_main
+
         train_sampler = DistributedSampler(dataset, shuffle=False)
         # valid_sampler = DistributedSampler(dataset_val, shuffle=False)
 
@@ -162,14 +164,12 @@ class Core:
             self._model.to(device_id)
             model = DDP(self._model, device_ids=[device_id])
 
-        if is_main:
-            self.__log("using device：", self._device)
+        self.__log("using device：", self._device)
 
         sync_early_stop = torch.tensor(0, device=device_id)
         for epoch in range(num_epochs + 1):
-            if is_main:
-                self.__log('Epoch {}/{}'.format(epoch, num_epochs))
-                self.__log('-------------')
+            self.__log('Epoch {}/{}'.format(epoch, num_epochs))
+            self.__log('-------------')
             for phase in [key for key in dataloaders_dict.keys()]:
                 if sync_early_stop != 0:
                     break
@@ -185,7 +185,7 @@ class Core:
 
                 if data_loader is not None and (train or is_main):
                     # batch loop
-                    with tqdm(data_loader, disable=not is_main) as pbar:
+                    with tqdm(data_loader, disable=not self.__verbose) as pbar:
                         pbar.set_description(f'Epoch: {epoch}')
                         for inputs, labels in pbar:
                             if sync_early_stop != 0:
@@ -217,9 +217,9 @@ class Core:
                                 iter_loss = self._scorer.add_batch_result(outputs, labels, loss) if is_main else 0
 
                             pbar.set_postfix(loss=iter_loss, lr=self._optimizer.param_groups[0]['lr'])
-                        self.__log("{} result:".format(phase))
 
                 with torch.set_grad_enabled(False):
+                    self.__log("{} result:".format(phase))
                     if is_main:
                         epoch_loss = self.after_epoch_one(phase)
 
