@@ -168,6 +168,7 @@ class Core:
         sync_early_stop = torch.tensor(0, device=device_id)
         print(rank, "Start epochs")
         for epoch in range(num_epochs + 1):
+            print(rank, "Start epochs {}".format(epoch))
             if is_main:
                 self.__log('Epoch {}/{}'.format(epoch, num_epochs))
                 self.__log('-------------')
@@ -240,7 +241,8 @@ class Core:
                 self.__log("Early stopping")
                 break
 
-        self._scorer.draw_total_result()
+        if is_main:
+            self._scorer.draw_total_result()
 
     def test(self, test_dataset, batch_size=64, collate_fn=None):
         train_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True,
