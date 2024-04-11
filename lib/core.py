@@ -234,9 +234,9 @@ class Core:
                 # synchronize variable for early stop to all devices
                 dist.broadcast(sync_early_stop, device_id)
 
-            print(epoch, rank, "will call barrier")
-            dist.barrier()
-            print(epoch, rank, "called barrier")
+            # print(epoch, rank, "will call barrier")
+            # dist.barrier()
+            # print(epoch, rank, "called barrier")
 
             if sync_early_stop != 0:
                 self.__log("Early stopping")
