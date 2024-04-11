@@ -208,10 +208,10 @@ class Core:
                                     dist.gather(outputs, output_list)
                                     dist.gather(labels, label_list)
                                     dist.gather(loss, loss_list)
-
-                                    outputs = torch.concatenate(output_list, dim=0)
-                                    labels = torch.concatenate(label_list, dim=0)
-                                    loss = torch.concatenate(loss_list, dim=0)
+                                    if is_main:
+                                        outputs = torch.concatenate(output_list, dim=0)
+                                        labels = torch.concatenate(label_list, dim=0)
+                                        loss = torch.concatenate(loss_list, dim=0)
 
                                 iter_loss = self._scorer.add_batch_result(outputs, labels, loss) if is_main else 0
 
