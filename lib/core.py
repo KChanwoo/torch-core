@@ -233,7 +233,7 @@ class Core:
                 dist.broadcast(sync_early_stop, device_id)
 
             print(epoch, rank, "will call barrier")
-            dist.barrier(async_op=True)
+            dist.barrier()
             print(epoch, rank, "called barrier")
 
             if sync_early_stop != 0:
