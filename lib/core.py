@@ -205,9 +205,9 @@ class Core:
                                     label_list = []
                                     loss_list = []
 
-                                    dist.all_gather(outputs, output_list)
-                                    dist.all_gather(labels, label_list)
-                                    dist.all_gather(loss, loss_list)
+                                    dist.gather(outputs, output_list)
+                                    dist.gather(labels, label_list)
+                                    dist.gather(loss, loss_list)
 
                                     outputs = torch.concatenate(output_list, dim=0)
                                     labels = torch.concatenate(label_list, dim=0)
