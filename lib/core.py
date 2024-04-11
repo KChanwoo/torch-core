@@ -221,20 +221,20 @@ class Core:
                     if is_main:
                         epoch_loss = self.after_epoch_one(phase)
 
-                if train and self._scheduler is not None:
-                    self._scheduler.step()
+            if self._scheduler is not None:
+                self._scheduler.step()
 
-                if not train and is_main:
-                    # check early stopping
-                    early_stopping(epoch_loss, model) if early_stopping is not None and model is not None else torch.save(model.module, self.save_path)
+            if is_main:
+                # check early stopping
+                early_stopping(epoch_loss, model) if early_stopping is not None and model is not None else torch.save(model.module, self.save_path)
 
-                    sync_early_stop = torch.tensor(1 if early_stopping.early_stop else 0, device=device_id)
-                    # synchronize variable for early stop to all devices
-                    dist.broadcast(sync_early_stop, device_id)
+                sync_early_stop = torch.tensor(1 if early_stopping.early_stop else 0, device=device_id)
+                # synchronize variable for early stop to all devices
+                dist.broadcast(sync_early_stop, device_id)
 
-                print(epoch, rank, "will call barrier")
-                dist.barrier(async_op=True)
-                print(epoch, rank, "called barrier")
+            print(epoch, rank, "will call barrier")
+            dist.barrier(async_op=True)
+            print(epoch, rank, "called barrier")
 
             if sync_early_stop != 0:
                 self.__log("Early stopping")
