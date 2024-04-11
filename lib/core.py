@@ -143,11 +143,12 @@ class Core:
         is_main = rank == 0
 
         train_sampler = DistributedSampler(dataset, shuffle=False)
+        valid_sampler = DistributedSampler(dataset_val, shuffle=False)
 
         dist_batch_size = int(batch_size / world_size)
         train_dataloader = DataLoader(dataset, batch_size=dist_batch_size, shuffle=False, sampler=train_sampler,
                                       collate_fn=collate_fn if collate_fn is not None else self._default_collate)
-        val_dataloader = DataLoader(dataset_val, batch_size=batch_size, shuffle=True,
+        val_dataloader = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, sampler=valid_sampler,
                                     collate_fn=collate_fn if collate_fn is not None else self._default_collate) if dataset_val is not None and is_main else None
         dataloaders_dict = {
             "train": train_dataloader,
@@ -177,13 +178,13 @@ class Core:
                 train = phase == 'train'
                 data_loader = dataloaders_dict[phase]
                 if model is not None:
+                    data_loader.sampler.set_epoch(epoch)
                     if train:
                         model.train()  # set network 'train' mode
-                        data_loader.sampler.set_epoch(epoch)
                     else:
                         model.eval()  # set network 'val' mode
 
-                if data_loader is not None and (train or is_main):
+                if data_loader is not None:
                     # batch loop
                     with tqdm(data_loader, disable=not is_main) as pbar:
                         pbar.set_description(f'Epoch: {epoch}')
@@ -198,6 +199,18 @@ class Core:
                                 outputs, loss = self.train_step(model, inputs, labels, train)
                                 # _, preds = torch.max(reshaped, 1)  # predict
                                 # back propagtion
+
+                                # output_list = []
+                                # label_list = []
+                                # loss_list = []
+                                #
+                                # dist.all_gather(outputs, output_list)
+                                # dist.all_gather(labels, label_list)
+                                # dist.all_gather(loss, loss_list)
+                                #
+                                # outputs = torch.concatenate(output_list, dim=0)
+                                # labels = torch.concatenate(label_list, dim=0)
+                                # loss = torch.concatenate(loss_list, dim=0)
 
                                 iter_loss = self._scorer.add_batch_result(outputs, labels, loss) if is_main else 0
 
@@ -219,9 +232,9 @@ class Core:
                     # synchronize variable for early stop to all devices
                     dist.broadcast(sync_early_stop, device_id)
 
-                print(rank, "will call barrier")
+                print(epoch, rank, "will call barrier")
                 dist.barrier(async_op=True)
-                print(rank, "called barrier")
+                print(epoch, rank, "called barrier")
 
             if sync_early_stop != 0:
                 self.__log("Early stopping")
