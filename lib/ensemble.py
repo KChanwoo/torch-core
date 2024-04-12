@@ -14,6 +14,7 @@ class VoteEnsemble(Core):
     HARD_UNANIMOUS = 0
     HARD_MAJORITY = 1
     SOFT = 2
+
     # WEIGHTED = 3
 
     def __init__(self, base_path: str, models: list[Core], scorer: Scorer = None,
@@ -127,14 +128,9 @@ class VoteEnsemble(Core):
         self._scorer.get_epoch_result(True, True, True, "test")
         self._scorer.draw_total_result()
 
-    def predict_dataset(self, test_dataset, batch_size=64, collate_fn=None, test_all=True):
-        # test each models
-        if test_all:
-            for model in self.models:
-                model.test(test_dataset, batch_size, collate_fn)
-
-        train_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True,
-                                      collate_fn=collate_fn if collate_fn is not None else self._default_collate)
+    def predict_dataset(self, test_dataset, batch_size=64, collate_fn=None):
+        test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True,
+                                     collate_fn=collate_fn if collate_fn is not None else self._default_collate)
         device = torch.device("cpu")
 
         for model in self.models:
@@ -143,7 +139,7 @@ class VoteEnsemble(Core):
             model.get_model().eval()
 
         # batch loop
-        for inputs, labels in tqdm(train_dataloader):
+        for inputs, labels in tqdm(test_dataloader):
             # send data to CPU
             inputs = inputs.to(device)
             labels = labels.to(device)
