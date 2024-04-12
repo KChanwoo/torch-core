@@ -98,7 +98,7 @@ class VoteEnsemble(Core):
             for model in self.models:
                 model.test(test_dataset, batch_size, collate_fn)
 
-        train_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True,
+        train_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
                                       collate_fn=collate_fn if collate_fn is not None else self._default_collate)
         device = torch.device("cpu")
 
@@ -129,7 +129,7 @@ class VoteEnsemble(Core):
         self._scorer.draw_total_result()
 
     def predict_dataset(self, test_dataset, batch_size=64, collate_fn=None):
-        test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True,
+        test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
                                      collate_fn=collate_fn if collate_fn is not None else self._default_collate)
         device = torch.device("cpu")
 
