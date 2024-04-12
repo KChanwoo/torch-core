@@ -118,7 +118,7 @@ class VoteEnsemble(Core):
             with torch.set_grad_enabled(False):
                 for i, model in enumerate(self.models):
                     weight = 1. if self.weight is None else self.weight[i]
-                    outputs, loss = model.train_step(inputs, labels, False)
+                    outputs, loss = model.train_step(model.get_model(), inputs, labels, False)
                     output_all.append(outputs * weight)
                     loss_all += loss.item()
 
@@ -149,7 +149,7 @@ class VoteEnsemble(Core):
             with torch.set_grad_enabled(False):
                 for i, model in enumerate(self.models):
                     weight = 1. if self.weight is None else self.weight[i]
-                    outputs, loss = model.train_step(inputs, labels, False)
+                    outputs, loss = model.train_step(model.get_model(), inputs, labels, False)
                     output_all.append(outputs * weight)
                     loss_all += loss.item()
 
