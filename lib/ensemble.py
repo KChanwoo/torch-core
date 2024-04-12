@@ -1,3 +1,4 @@
+import copy
 import math
 from typing import Union
 
@@ -125,3 +126,42 @@ class VoteEnsemble(Core):
 
         self._scorer.get_epoch_result(True, True, True, "test")
         self._scorer.draw_total_result()
+
+    def predict_dataset(self, test_dataset, batch_size=64, collate_fn=None, test_all=True):
+        # test each models
+        if test_all:
+            for model in self.models:
+                model.test(test_dataset, batch_size, collate_fn)
+
+        train_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True,
+                                      collate_fn=collate_fn if collate_fn is not None else self._default_collate)
+        device = torch.device("cpu")
+
+        for model in self.models:
+            model.load(model.save_path)
+            model.get_model().to(device)
+            model.get_model().eval()
+
+        # batch loop
+        for inputs, labels in tqdm(train_dataloader):
+            # send data to CPU
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+            output_all = []
+            loss_all = torch.tensor(0.0)
+            # test ensemble
+            with torch.set_grad_enabled(False):
+                for i, model in enumerate(self.models):
+                    weight = 1. if self.weight is None else self.weight[i]
+                    outputs, loss = model.train_step(inputs, labels, False)
+                    output_all.append(outputs * weight)
+                    loss_all += loss.item()
+
+                outputs = self.vote(output_all)
+                self._scorer.add_batch_result(outputs, labels, loss_all / len(self.models))
+
+        pred = copy.deepcopy(self._scorer.get_preds())
+        output_list = copy.deepcopy(self._scorer.get_outputs())
+        self._scorer.reset_epoch()
+
+        return output_list, pred
