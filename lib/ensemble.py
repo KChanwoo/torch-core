@@ -100,7 +100,7 @@ class VoteEnsemble(Core):
 
         train_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
                                       collate_fn=collate_fn if collate_fn is not None else self._default_collate)
-        device = torch.device("cpu")
+        device = torch.device(self._device)
 
         for model in self.models:
             model.load(model.save_path)
@@ -131,7 +131,7 @@ class VoteEnsemble(Core):
     def predict_dataset(self, test_dataset, batch_size=64, collate_fn=None):
         test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
                                      collate_fn=collate_fn if collate_fn is not None else self._default_collate)
-        device = torch.device("cpu")
+        device = torch.device(self._device)
 
         for model in self.models:
             model.load(model.save_path)
