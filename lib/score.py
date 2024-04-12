@@ -85,6 +85,12 @@ class Scorer:
 
         return self._loss_list, self._accuracy_list, self._score_list
 
+    def get_outputs(self):
+        return self._output_list
+
+    def get_preds(self):
+        return self._preds_list
+
 
 class BinaryScorer(Scorer):
     def add_batch_result(self, outputs, labels, batch_loss):

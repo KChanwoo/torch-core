@@ -1,3 +1,4 @@
+import copy
 import os
 from typing import Union
 
@@ -81,7 +82,8 @@ class Core:
             "val": val_dataloader
         }
 
-        early_stopping = EarlyStopping(patience=10, verbose=True, path=self.save_path) if self.__early_stopping else None
+        early_stopping = EarlyStopping(patience=10, verbose=True,
+                                       path=self.save_path) if self.__early_stopping else None
 
         if self._model is not None:
             self._model.to(self._device)
@@ -127,7 +129,9 @@ class Core:
 
                 if not train:
                     # check early stopping
-                    early_stopping(epoch_loss, self._model) if early_stopping is not None and self._model is not None else torch.save(self._model, self.save_path)
+                    early_stopping(epoch_loss,
+                                   self._model) if early_stopping is not None and self._model is not None else torch.save(
+                        self._model, self.save_path)
                 elif self._scheduler is not None:
                     self._scheduler.step()
 
@@ -137,8 +141,9 @@ class Core:
 
         self._scorer.draw_total_result()
 
-    def dist_train(self, rank: int, world_size: int, dataset: Dataset, dataset_val: Union[Dataset, None], batch_size=64, num_epochs=1000,
-              collate_fn=None):
+    def dist_train(self, rank: int, world_size: int, dataset: Dataset, dataset_val: Union[Dataset, None], batch_size=64,
+                   num_epochs=1000,
+                   collate_fn=None):
         device_id = rank % world_size
         is_main = rank == 0
 
@@ -150,7 +155,7 @@ class Core:
         dist_batch_size = int(batch_size / world_size)
         train_dataloader = DataLoader(dataset, batch_size=dist_batch_size, shuffle=False, sampler=train_sampler,
                                       collate_fn=collate_fn if collate_fn is not None else self._default_collate)
-        val_dataloader = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, # sampler=valid_sampler,
+        val_dataloader = DataLoader(dataset_val, batch_size=batch_size, shuffle=False,  # sampler=valid_sampler,
                                     collate_fn=collate_fn if collate_fn is not None else self._default_collate) if dataset_val is not None and is_main else None
         dataloaders_dict = {
             "train": train_dataloader,
@@ -201,8 +206,10 @@ class Core:
                                 # back propagtion
 
                                 if train:
-                                    output_list = [torch.zeros_like(outputs) for _ in range(world_size)] if is_main else None
-                                    label_list = [torch.zeros_like(labels) for _ in range(world_size)] if is_main else None
+                                    output_list = [torch.zeros_like(outputs) for _ in
+                                                   range(world_size)] if is_main else None
+                                    label_list = [torch.zeros_like(labels) for _ in
+                                                  range(world_size)] if is_main else None
                                     loss_list = [torch.zeros_like(loss) for _ in range(world_size)] if is_main else None
 
                                     dist.gather(outputs, output_list)
@@ -228,7 +235,9 @@ class Core:
 
             if is_main:
                 # check early stopping
-                early_stopping(epoch_loss, model.module) if early_stopping is not None and model is not None else torch.save(model.module, self.save_path)
+                early_stopping(epoch_loss,
+                               model.module) if early_stopping is not None and model is not None else torch.save(
+                    model.module, self.save_path)
 
                 sync_early_stop = torch.tensor(1 if early_stopping.early_stop else 0, device=device_id)
 
@@ -243,8 +252,8 @@ class Core:
             self._scorer.draw_total_result()
 
     def test(self, test_dataset, batch_size=64, collate_fn=None):
-        train_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True,
-                                      collate_fn=collate_fn if collate_fn is not None else self._default_collate)
+        dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
+                                collate_fn=collate_fn if collate_fn is not None else self._default_collate)
         self.__log("using device：", self._device)
 
         self._model.to(self._device)
@@ -252,7 +261,7 @@ class Core:
         self._model.eval()  # set network 'val' mode
 
         # batch loop
-        for inputs, labels in tqdm(train_dataloader):
+        for inputs, labels in tqdm(dataloader, disable=not self.__verbose):
             # send data to GPU
             inputs = inputs.to(self._device)
             labels = labels.to(self._device)
@@ -264,6 +273,32 @@ class Core:
 
         self._scorer.get_epoch_result(True, True, True, "test")
         self._scorer.draw_total_result()
+
+    def predict_dataset(self, dataset, batch_size=64, collate_fn=None):
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False,
+                                collate_fn=collate_fn if collate_fn is not None else self._default_collate)
+        self.__log("using device：", self._device)
+
+        self._model.to(self._device)
+        self.load(self.save_path)
+        self._model.eval()  # set network 'val' mode
+
+        # batch loop
+        for inputs, labels in tqdm(dataloader, disable=not self.__verbose):
+            # send data to GPU
+            inputs = inputs.to(self._device)
+            labels = labels.to(self._device)
+
+            # forward
+            with torch.set_grad_enabled(False):
+                outputs, loss = self.train_step(self._model, inputs, labels, False)
+                self._scorer.add_batch_result(outputs, labels, loss)
+
+        pred = copy.deepcopy(self._scorer.get_preds())
+        output_list = copy.deepcopy(self._scorer.get_outputs())
+        self._scorer.reset_epoch()
+
+        return output_list, pred
 
     def load(self, pt_path):
         self._model.load_state_dict(
