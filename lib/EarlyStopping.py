@@ -2,12 +2,19 @@ import torch
 import numpy as np
 
 
+class EarlyStoppingMode:
+    SCORE = 0
+    LOSS = 1
+    ACCU = 2
+
+
 class EarlyStopping:
     """
     주어진 patience 이후로 validation loss가 개선되지 않으면 학습을 조기 중지
     reference: https://velog.io/@jg31109/Early-stopping
     """
-    def __init__(self, patience=7, verbose=False, delta=0, path='checkpoint.pt'):
+
+    def __init__(self, patience=7, verbose=False, delta=0, path='checkpoint.pt', mode=EarlyStoppingMode.LOSS):
         """
         Args:
             patience (int): validation loss가 개선된 후 기다리는 기간
@@ -27,22 +34,24 @@ class EarlyStopping:
         self.val_loss_min = np.Inf
         self.delta = delta
         self.path = path
+        self.mode = mode
 
-    def __call__(self, val_loss, model):
+    def __call__(self, values, model):
 
-        score = -val_loss
+        score = -values if self.mode == EarlyStoppingMode.LOSS else values
+        delta = self.delta if self.mode == EarlyStoppingMode.LOSS else -self.delta
 
         if self.best_score is None:
             self.best_score = score
-            self.save_checkpoint(val_loss, model)
-        elif score < self.best_score + self.delta:
+            self.save_checkpoint(values, model)
+        elif score < self.best_score + delta:
             self.counter += 1
             print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
             if self.counter >= self.patience:
                 self.early_stop = True
         else:
             self.best_score = score
-            self.save_checkpoint(val_loss, model)
+            self.save_checkpoint(values, model)
             self.counter = 0
 
     def save_checkpoint(self, val_loss, model):

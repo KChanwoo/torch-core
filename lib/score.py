@@ -1,3 +1,4 @@
+import math
 import os
 
 import torch
@@ -47,6 +48,9 @@ class Scorer:
         return self._epoch_loss / len(self._output_list)
 
     def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
+        """
+        :return loss, accuracy (accuracy, MSE, etc), score (F1, RMSE, etc)
+        """
         epoch_loss = self._epoch_loss / len(self._preds_list)
 
         print('Loss: {:.4f}'.format(epoch_loss))
@@ -65,7 +69,7 @@ class Scorer:
                 f.writelines(lines)
 
         self.reset_epoch()
-        return epoch_loss
+        return epoch_loss, epoch_loss, epoch_loss
 
     def draw_total_result(self):
         fig, ax = plt.subplots(facecolor="w")
@@ -138,7 +142,7 @@ class BinaryScorer(Scorer):
         print('Loss: {:.4f} Acc: {:.4f} F1: {:.4f}'.format(epoch_loss, epoch_acc, epoch_f1))
         self.reset_epoch()
 
-        return epoch_loss
+        return epoch_loss, epoch_acc, epoch_f1
 
 
 class MulticlassScorer(Scorer):
@@ -206,7 +210,7 @@ class MulticlassScorer(Scorer):
         print('Loss: {:.4f} Acc: {:.4f} F1: {:.4f}'.format(epoch_loss, epoch_acc, epoch_f1))
 
         self.reset_epoch()
-        return epoch_loss
+        return epoch_loss, epoch_acc, epoch_f1
 
 
 class MSEScorer(Scorer):
@@ -250,7 +254,7 @@ class MSEScorer(Scorer):
         print('Loss: {:.4f} MSE: {:.4f}'.format(epoch_loss, epoch_mse))
         self.reset_epoch()
 
-        return epoch_loss
+        return epoch_loss, epoch_mse, math.sqrt(epoch_mse)
 
 
 class GanScorer(Scorer):
@@ -286,4 +290,4 @@ class GanScorer(Scorer):
             epoch_loss = self._epoch_loss / len(self._output_list)
             print('Loss: {:.4f}'.format(epoch_loss))
         self.reset_epoch()
-        return 0
+        return 0, 0, 0

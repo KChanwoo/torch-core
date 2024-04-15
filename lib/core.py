@@ -9,7 +9,7 @@ from torch.optim import Optimizer
 from torch.utils.data import Dataset, DataLoader, DistributedSampler
 from tqdm import tqdm
 
-from lib.EarlyStopping import EarlyStopping
+from lib.EarlyStopping import EarlyStopping, EarlyStoppingMode
 from lib.score import Scorer, GanScorer
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -18,12 +18,14 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 class Core:
     def __init__(self, base_path: str, model: Union[None, torch.nn.Module], optimizer: Union[None, Optimizer],
                  loss: Union[None, torch.nn.Module], scheduler=Union[None, torch.optim.lr_scheduler.LRScheduler],
-                 scorer: Scorer = None, early_stopping: bool = True, verbose: bool = True, show_fig=False):
+                 scorer: Scorer = None, early_stopping: bool = True, verbose: bool = True, show_fig=False,
+                 early_stopping_mode=EarlyStoppingMode.LOSS):
         self._model = model
         self._base_path = base_path
         self._optimizer = optimizer
         self._scheduler = scheduler
         self.__early_stopping = early_stopping
+        self._early_stopping_mode = early_stopping_mode
         self._loss = loss
         self._scorer = scorer if scorer is not None else Scorer(self._base_path, show_fig)
         self._device = torch.device(
@@ -83,7 +85,7 @@ class Core:
         }
 
         early_stopping = early_stopping if early_stopping is not None else \
-            EarlyStopping(patience=5, verbose=True, path=self.save_path) if self.__early_stopping else None
+            EarlyStopping(patience=5, verbose=True, path=self.save_path, mode=self._early_stopping_mode) if self.__early_stopping else None
 
         if self._model is not None:
             self._model.to(self._device)
@@ -125,11 +127,19 @@ class Core:
                         self.__log("{} result:".format(phase))
 
                 with torch.set_grad_enabled(False):
-                    epoch_loss = self.after_epoch_one(phase)
+                    epoch_loss, epoch_acc, epoch_score = self.after_epoch_one(phase)
 
                 if not train:
                     # check early stopping
-                    early_stopping(epoch_loss,
+
+                    if self._early_stopping_mode == EarlyStoppingMode.LOSS:
+                        value = epoch_loss
+                    elif self._early_stopping_mode == EarlyStoppingMode.ACCU:
+                        value = epoch_acc
+                    else:
+                        value = epoch_score
+
+                    early_stopping(value,
                                    self._model) if early_stopping is not None and self._model is not None else torch.save(
                         self._model, self.save_path)
                 elif self._scheduler is not None:
@@ -229,7 +239,7 @@ class Core:
                 with torch.set_grad_enabled(False):
                     self.__log("{} result:".format(phase))
                     if is_main:
-                        epoch_loss = self.after_epoch_one(phase)
+                        epoch_loss, epoch_acc, epoch_score = self.after_epoch_one(phase)
 
             if self._scheduler is not None:
                 self._scheduler.step()
