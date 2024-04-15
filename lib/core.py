@@ -72,7 +72,7 @@ class Core:
         return self._scorer.get_epoch_result(phase == 'val', phase == 'val')
 
     def train(self, dataset: Dataset, dataset_val: Union[Dataset, None], batch_size=64, num_epochs=1000,
-              collate_fn=None):
+              collate_fn=None, early_stopping=None):
         train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True,
                                       collate_fn=collate_fn if collate_fn is not None else self._default_collate)
         val_dataloader = DataLoader(dataset_val, batch_size=batch_size, shuffle=True,
@@ -82,8 +82,8 @@ class Core:
             "val": val_dataloader
         }
 
-        early_stopping = EarlyStopping(patience=10, verbose=True,
-                                       path=self.save_path) if self.__early_stopping else None
+        early_stopping = early_stopping if early_stopping is not None else \
+            EarlyStopping(patience=5, verbose=True, path=self.save_path) if self.__early_stopping else None
 
         if self._model is not None:
             self._model.to(self._device)
@@ -143,7 +143,7 @@ class Core:
 
     def dist_train(self, rank: int, world_size: int, dataset: Dataset, dataset_val: Union[Dataset, None], batch_size=64,
                    num_epochs=1000,
-                   collate_fn=None):
+                   collate_fn=None, early_stopping=None):
         device_id = rank % world_size
         is_main = rank == 0
 
@@ -162,7 +162,8 @@ class Core:
             "val": val_dataloader
         }
 
-        early_stopping = EarlyStopping(patience=5, verbose=True, path=self.save_path) if self.__early_stopping else None
+        early_stopping = early_stopping if early_stopping is not None else \
+            EarlyStopping(patience=5, verbose=True, path=self.save_path) if self.__early_stopping else None
 
         model = None
         if self._model is not None:
