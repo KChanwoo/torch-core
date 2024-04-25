@@ -30,9 +30,76 @@ class VoteEnsemble(Core):
         #     "WEIGHTED mode needs weight value and has same length {0} as model {1}".format(
         #         len(weight) if weight is not None else None, len(models))
 
+    def _vote_hard_un(self, output_all):
+        result = []
+        shape = output_all[0].shape
+        if len(shape) == 1:
+            num_class = 1
+        else:
+            num_class = shape[1]
+
+        for outputs in output_all:
+            result_one = self.proceed_outputs(outputs)
+            result.append(result_one)
+
+        result = torch.stack(result)
+        if self.mode == VoteEnsemble.HARD_UNANIMOUS:
+            result = torch.sum(result, dim=0)
+            result = (result == len(self.models)).float()
+            result = self.add_decay(result)
+        elif self.mode == VoteEnsemble.HARD_MAJORITY:
+            result = torch.sum(result, dim=0)
+            if num_class > 1:
+                result = torch.nn.functional.softmax(result.float())
+            else:
+                result = (result > len(self.models) / 2).float()
+                result = self.add_decay(result)
+        elif self.mode == VoteEnsemble.SOFT:
+            result = torch.mean(result, dim=-1)
+
+        return result
+
+    def _vote_hard_maj(self, outputs):
+        result = []
+        shape = output_all[0].shape
+        if len(shape) == 1:
+            num_class = 1
+        else:
+            num_class = shape[1]
+
+        for outputs in output_all:
+            result_one = self.proceed_outputs(outputs)
+            result.append(result_one)
+
+        result = torch.stack(result)
+        if self.mode == VoteEnsemble.HARD_UNANIMOUS:
+            result = torch.sum(result, dim=0)
+            result = (result == len(self.models)).float()
+            result = self.add_decay(result)
+        elif self.mode == VoteEnsemble.HARD_MAJORITY:
+            result = torch.sum(result, dim=0)
+            if num_class > 1:
+                result = torch.nn.functional.softmax(result.float())
+            else:
+                result = (result > len(self.models) / 2).float()
+                result = self.add_decay(result)
+        elif self.mode == VoteEnsemble.SOFT:
+            result = torch.mean(result, dim=-1)
+
+        return result
+
+    def _vote_soft(self, output_all):
+
+        result = torch.stack(output_all)
+        result = torch.mean(result, dim=0)
+
+        return result
+
     def proceed_outputs(self, output):
-        shape = output.shape
         if self.mode == VoteEnsemble.HARD_UNANIMOUS or self.mode == VoteEnsemble.HARD_MAJORITY:
+            output = output.squeeze()
+            shape = output.shape
+
             if len(shape) == 1:
                 # binary
                 return (output > .5).float()
@@ -50,31 +117,12 @@ class VoteEnsemble(Core):
 
     def vote(self, output_all):
         result = []
-        shape = output_all[0].shape
-        if len(shape) == 1:
-            num_class = 1
-        else:
-            num_class = shape[1]
-
-        for outputs in output_all:
-            squeezed = outputs.squeeze()
-            result_one = self.proceed_outputs(squeezed)
-            result.append(result_one)
-
-        result = torch.stack(result)
         if self.mode == VoteEnsemble.HARD_UNANIMOUS:
-            result = torch.sum(result, dim=0)
-            result = (result == len(self.models)).float()
-            result = self.add_decay(result)
+            result = self._vote_hard_un(output_all)
         elif self.mode == VoteEnsemble.HARD_MAJORITY:
-            result = torch.sum(result, dim=0)
-            if num_class > 1:
-                result = torch.nn.functional.softmax(result.float())
-            else:
-                result = (result > len(self.models) / 2).float()
-                result = self.add_decay(result)
+            result = self._vote_hard_maj(output_all)
         elif self.mode == VoteEnsemble.SOFT:
-            result = torch.mean(result, dim=0)
+            result = self._vote_soft(output_all)
 
         return result
 
@@ -121,7 +169,6 @@ class VoteEnsemble(Core):
                     outputs, loss = model.train_step(model.get_model(), inputs, labels, False)
                     output_all.append(outputs * weight)
                     loss_all += loss.item()
-
                 outputs = self.vote(output_all)
                 self._scorer.add_batch_result(outputs, labels, loss_all / len(self.models))
 

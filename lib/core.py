@@ -102,10 +102,6 @@ class Core:
                     else:
                         self._model.eval()  # set network 'val' mode
 
-                # Before training
-                if (epoch == 0) and train:
-                    continue
-
                 data_loader = dataloaders_dict[phase]
                 if data_loader is not None:
                     # batch loop
