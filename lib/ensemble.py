@@ -32,34 +32,19 @@ class VoteEnsemble(Core):
 
     def _vote_hard_un(self, output_all):
         result = []
-        shape = output_all[0].shape
-        if len(shape) == 1:
-            num_class = 1
-        else:
-            num_class = shape[1]
 
         for outputs in output_all:
             result_one = self.proceed_outputs(outputs)
             result.append(result_one)
 
         result = torch.stack(result)
-        if self.mode == VoteEnsemble.HARD_UNANIMOUS:
-            result = torch.sum(result, dim=0)
-            result = (result == len(self.models)).float()
-            result = self.add_decay(result)
-        elif self.mode == VoteEnsemble.HARD_MAJORITY:
-            result = torch.sum(result, dim=0)
-            if num_class > 1:
-                result = torch.nn.functional.softmax(result.float())
-            else:
-                result = (result > len(self.models) / 2).float()
-                result = self.add_decay(result)
-        elif self.mode == VoteEnsemble.SOFT:
-            result = torch.mean(result, dim=-1)
+        result = torch.sum(result, dim=0)
+        result = (result == len(self.models)).float()
+        result = self.add_decay(result)
 
         return result
 
-    def _vote_hard_maj(self, outputs):
+    def _vote_hard_maj(self, output_all):
         result = []
         shape = output_all[0].shape
         if len(shape) == 1:
@@ -72,19 +57,12 @@ class VoteEnsemble(Core):
             result.append(result_one)
 
         result = torch.stack(result)
-        if self.mode == VoteEnsemble.HARD_UNANIMOUS:
-            result = torch.sum(result, dim=0)
-            result = (result == len(self.models)).float()
+        result = torch.sum(result, dim=0)
+        if num_class > 1:
+            result = torch.nn.functional.softmax(result.float())
+        else:
+            result = (result > len(self.models) / 2).float()
             result = self.add_decay(result)
-        elif self.mode == VoteEnsemble.HARD_MAJORITY:
-            result = torch.sum(result, dim=0)
-            if num_class > 1:
-                result = torch.nn.functional.softmax(result.float())
-            else:
-                result = (result > len(self.models) / 2).float()
-                result = self.add_decay(result)
-        elif self.mode == VoteEnsemble.SOFT:
-            result = torch.mean(result, dim=-1)
 
         return result
 
@@ -96,19 +74,16 @@ class VoteEnsemble(Core):
         return result
 
     def proceed_outputs(self, output):
-        if self.mode == VoteEnsemble.HARD_UNANIMOUS or self.mode == VoteEnsemble.HARD_MAJORITY:
-            output = output.squeeze()
-            shape = output.shape
+        output = output.squeeze()
+        shape = output.shape
 
-            if len(shape) == 1:
-                # binary
-                return (output > .5).float()
-            else:
-                # multi-class
-                args = torch.argmax(output, dim=1)
-                return torch.nn.functional.one_hot(args, shape[1])
+        if len(shape) == 1:
+            # binary
+            return (output > .5).float()
         else:
-            return output
+            # multi-class
+            args = torch.argmax(output, dim=1)
+            return torch.nn.functional.one_hot(args, shape[1])
 
     def add_decay(self, result):
         decay = 1 - torch.randint_like(result, low=1, high=5) / 100
