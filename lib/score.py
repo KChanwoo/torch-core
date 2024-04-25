@@ -97,9 +97,17 @@ class Scorer:
 
 
 class BinaryScorer(Scorer):
+    def __init__(self, base_path, show=False, do_sigmoid=True):
+        super().__init__(base_path, show)
+        self.do_sigmoid = do_sigmoid
+
     def add_batch_result(self, outputs, labels, batch_loss):
         reshaped = outputs.squeeze(1)
-        preds = (reshaped > 0.5).float().cpu()
+        if self.do_sigmoid:
+            preds = torch.nn.functional.sigmoid(reshaped)
+        else:
+            preds = reshaped
+        preds = (preds > 0.5).float().cpu()
         # update loss summation
         self._epoch_loss += batch_loss.item() * outputs.size(0)
         # update correct prediction summation
