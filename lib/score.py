@@ -189,7 +189,7 @@ class MulticlassScorer(Scorer):
 
         if draw:
             plt.legend()
-            self.show(plt, os.path.join(self._base_path, "val_roc" + str(self._save_num) + ".png"))
+            self.show(plt, os.path.join(self._base_path, "{0}_roc".format(title) + str(self._save_num) + ".png"))
             self._save_num += 1
 
         epoch_corrects = torch.sum(torch.tensor(self._preds_list).cpu() == torch.tensor(self._labels_list).cpu())
