@@ -158,7 +158,7 @@ class VoteEnsemble(Core):
             model.load(model.save_path)
             model.get_model().to(device)
             model.get_model().eval()
-            loss_one_model = .0
+            loss_one_model = torch.tensor(.0)
             output_one_model = []
             label_one_model = []
             # batch loop
@@ -181,7 +181,7 @@ class VoteEnsemble(Core):
                 label_all.append(torch.cat(label_one_model, dim=0))
 
         outputs = self.vote(output_all)
-        self._scorer.add_batch_result(outputs, label_all[0], loss_all / len(self.models))
+        self._scorer.add_batch_result(outputs, label_all[0], loss_all / len(self.models) * outputs.shape[0])
 
     def test(self, test_dataset, batch_size=64, collate_fn=None, test_all=True):
         # test each models
