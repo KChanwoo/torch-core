@@ -161,7 +161,7 @@ class Core:
         dist_batch_size = int(batch_size / world_size)
         train_dataloader = DataLoader(dataset, batch_size=dist_batch_size, shuffle=False, sampler=train_sampler,
                                       collate_fn=collate_fn if collate_fn is not None else self._default_collate)
-        val_dataloader = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, sampler=valid_sampler,
+        val_dataloader = DataLoader(dataset_val, batch_size=dist_batch_size, shuffle=False, sampler=valid_sampler,
                                     collate_fn=collate_fn if collate_fn is not None else self._default_collate) if dataset_val is not None and is_main else None
         dataloaders_dict = {
             "train": train_dataloader,
