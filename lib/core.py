@@ -29,7 +29,7 @@ class Core:
         self._early_stopping_mode = early_stopping_mode
         self._loss = loss
         self._scorer = scorer if scorer is not None else Scorer(self._base_path, show_fig)
-        self._scaler = torch.cuda.amp.GradScaler() if  torch.backends.cuda.is_built() and use_amp else None
+        self._scaler = torch.cuda.amp.GradScaler() if torch.backends.cuda.is_built() and use_amp else None
         self._device = torch.device(
             "cuda:0" if torch.backends.cuda.is_built() else "mps" if torch.backends.mps.is_built() else "cpu")
 
@@ -98,7 +98,8 @@ class Core:
         }
 
         early_stopping = early_stopping if early_stopping is not None else \
-            EarlyStopping(patience=5, verbose=True, path=self.save_path, mode=self._early_stopping_mode) if self.__early_stopping else None
+            EarlyStopping(patience=5, verbose=True, path=self.save_path,
+                          mode=self._early_stopping_mode) if self.__early_stopping else None
 
         if self._model is not None:
             self._model.to(self._device)
@@ -267,7 +268,8 @@ class Core:
                                model.module) if early_stopping is not None and model is not None else torch.save(
                     model.module, self.save_path)
 
-                sync_early_stop = torch.tensor(1 if early_stopping is not None and early_stopping.early_stop else 0, device=device_id)
+                sync_early_stop = torch.tensor(1 if early_stopping is not None and early_stopping.early_stop else 0,
+                                               device=device_id)
 
             # synchronize variable for early stop to all devices
             dist.broadcast(sync_early_stop, 0)
@@ -278,6 +280,61 @@ class Core:
 
         if is_main:
             self._scorer.draw_total_result()
+
+    def train_hf(self, world_size, config, dataset: Dataset, dataset_val: Union[Dataset, None], batch_size=64,
+                 num_epochs=1000):
+
+        try:
+            from transformers import TrainingArguments, PreTrainedModel, PretrainedConfig, Trainer, EarlyStoppingCallback
+        except:
+            raise Exception("need transformers if you want to use train_hf")
+
+        training_args = TrainingArguments(
+            output_dir=self._base_path,
+            evaluation_strategy="epoch",
+            save_strategy="epoch",
+            logging_strategy='epoch',
+            learning_rate=2e-5,
+            per_device_train_batch_size=int(batch_size / world_size),
+            per_device_eval_batch_size=int(batch_size / world_size),
+            num_train_epochs=num_epochs,
+            weight_decay=0.01,
+            load_best_model_at_end=True,
+            metric_for_best_model="eval_loss",
+            greater_is_better=False
+        )
+
+        class CustomModelForSequenceClassification(PreTrainedModel):
+            def __init__(self, config, model, loss_fct):
+                super().__init__(config)
+                self.model = model
+                self.loss_fct = loss_fct
+
+            def forward(self, input_ids=None, labels=None):
+                logits = self.model(input_ids)
+                loss = None
+                if labels is not None:
+                    loss = self.loss_fct(logits, labels)
+                output = (logits,)
+                return ((loss,) + output) if loss is not None else output
+
+        callback = []
+        if self._early_stopping_mode:
+            callback.append(EarlyStoppingCallback(
+                early_stopping_patience=5
+            ))
+
+        model_hf = CustomModelForSequenceClassification(config, self._model, self._loss)
+        trainer = Trainer(
+            model=model_hf,
+            args=training_args,
+            train_dataset=dataset,
+            eval_dataset=dataset_val,
+            callbacks=callback,
+            optimizers=(self._optimizer, self._scheduler)
+        )
+
+        trainer.train()
 
     def test(self, test_dataset, batch_size=64, collate_fn=None):
         dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
