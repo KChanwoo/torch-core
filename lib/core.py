@@ -20,7 +20,7 @@ class Core:
     def __init__(self, base_path: str, model: Union[None, torch.nn.Module], optimizer: Union[None, Optimizer],
                  loss: Union[None, torch.nn.Module], scheduler=Union[None, torch.optim.lr_scheduler.LRScheduler],
                  scorer: Scorer = None, early_stopping: bool = True, verbose: bool = True, show_fig=False,
-                 early_stopping_mode=EarlyStoppingMode.LOSS):
+                 early_stopping_mode=EarlyStoppingMode.LOSS, use_amp=False):
         self._model = model
         self._base_path = base_path
         self._optimizer = optimizer
@@ -29,6 +29,7 @@ class Core:
         self._early_stopping_mode = early_stopping_mode
         self._loss = loss
         self._scorer = scorer if scorer is not None else Scorer(self._base_path, show_fig)
+        self._scaler = torch.cuda.amp.GradScaler() if  torch.backends.cuda.is_built() and use_amp else None
         self._device = torch.device(
             "cuda:0" if torch.backends.cuda.is_built() else "mps" if torch.backends.mps.is_built() else "cpu")
 
@@ -47,12 +48,23 @@ class Core:
         if train:
             self._optimizer.zero_grad()
 
-        outputs = model(inputs)
-        loss = self._loss(outputs, labels)  # calculate loss
+        if self._scaler is None:
+            outputs = model(inputs)
+            loss = self._loss(outputs, labels)  # calculate loss
 
-        if train:
-            loss.backward()
-            self._optimizer.step()
+            if train:
+                loss.backward()
+                self._optimizer.step()
+        else:
+            with torch.cuda.amp.autocast():
+                outputs = model(inputs)
+                loss = self._loss(outputs, labels)  # calculate loss
+
+            if train:
+                self._scaler.scale(loss).backward()
+                self._scaler.step(self._optimizer)
+                self._scaler.update()
+
         return outputs, loss
 
     def _default_collate(self, batch):
