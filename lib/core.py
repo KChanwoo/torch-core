@@ -308,9 +308,8 @@ class Core:
         def compute_metrics(p):
             pred = torch.tensor(p.predictions)
             label = torch.tensor(p.label_ids)
-            loss_ = self._loss(pred, label)
-            self._scorer.add_batch_result(pred, label, loss_)
-            loss__, acc__, f1__ = self.after_epoch_one('val')
+            self._scorer.add_batch_result(pred, label, torch.tensor(0))
+            loss__, acc__, f1__ = self._scorer.get_epoch_result(True, True)
             return {'AUC': acc__, 'F1': f1__}
 
         class CustomModelForSequenceClassification(PreTrainedModel):
