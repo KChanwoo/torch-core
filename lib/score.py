@@ -171,15 +171,18 @@ class MulticlassScorer(Scorer):
 
     def get_epoch_result(self, draw: bool, is_merged: bool, write=False, title="val"):
         n_class = len(self._output_list[0])
+
         if isinstance(self._labels_list[0], int):
             # labels are index of classes
-            labels_total = one_hot(torch.tensor(self._labels_list), num_classes=n_class).tolist()
-        else:
             labels_total = self._labels_list
+            labels_one_hot = one_hot(torch.tensor(self._labels_list), num_classes=n_class).tolist()
+        else:
+            labels_total = torch.argmax(torch.tensor(self._labels_list), dim=1).tolist()
+            labels_one_hot = self._labels_list
 
         for i in range(n_class):
 
-            labels = [label_one[i] for label_one in labels_total]
+            labels = [label_one[i] for label_one in labels_one_hot]
             outputs = [output_one[i] for output_one in self._output_list]
 
             fpr, tpr, _ = roc_curve(labels, outputs)
@@ -193,8 +196,7 @@ class MulticlassScorer(Scorer):
             self._save_num += 1
 
         epoch_corrects = torch.sum(torch.tensor(self._preds_list).cpu() == torch.tensor(self._labels_list).cpu())
-        preds_total = one_hot(torch.tensor(self._preds_list), num_classes=n_class).tolist()
-        epoch_f1 = f1_score(labels_total, preds_total, average='weighted')
+        epoch_f1 = f1_score(labels_total, self._preds_list, average='weighted')
         epoch_loss = self._epoch_loss / len(self._preds_list)
         epoch_acc = epoch_corrects.double() / len(self._preds_list)
 

@@ -33,9 +33,9 @@ model = torch.nn.Sequential(
 
 opt = torch.optim.Adam(model.parameters(), lr=1.0e-4)
 loss = torch.nn.CrossEntropyLoss()
-scorer = MulticlassScorer(".\\result\\classifier", 10)
+scorer = MulticlassScorer(".\\result\\classifier")
 
-core = Core(".\\result\\classifier", model, opt, loss, scorer)
+core = Core(".\\result\\classifier", model, opt, loss, None, scorer)
 
 core.train(mnist_train, mnist_test, num_epochs=5)
 core.test(mnist_test)
