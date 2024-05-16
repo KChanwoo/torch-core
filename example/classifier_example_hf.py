@@ -52,8 +52,9 @@ class Dataset_hf(Dataset):
 
 opt = torch.optim.Adam(model.parameters(), lr=1.0e-4)
 loss = torch.nn.CrossEntropyLoss()
+scorer = MulticlassScorer(".\\result\\classifier")
 
-core = Core(".\\result\\classifier", model, opt, loss, None, None)
+core = Core(".\\result\\classifier", model, opt, loss, None, scorer)
 
 config = PretrainedConfig(
     num_labels=10,

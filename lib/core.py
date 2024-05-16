@@ -301,8 +301,17 @@ class Core:
             weight_decay=0.01,
             load_best_model_at_end=True,
             metric_for_best_model="eval_loss",
-            greater_is_better=False
+            greater_is_better=False,
+            ddp_find_unused_parameters=False
         )
+
+        def compute_metrics(p):
+            pred = torch.tensor(p.predictions)
+            label = torch.tensor(p.label_ids)
+            loss_ = self._loss(pred, label)
+            self._scorer.add_batch_result(pred, label, loss_)
+            loss__, acc__, f1__ = self.after_epoch_one('val')
+            return {'AUC': acc__, 'F1': f1__}
 
         class CustomModelForSequenceClassification(PreTrainedModel):
             def __init__(self, config, model, loss_fct):
@@ -331,10 +340,13 @@ class Core:
             train_dataset=dataset,
             eval_dataset=dataset_val,
             callbacks=callback,
-            optimizers=(self._optimizer, self._scheduler)
+            optimizers=(self._optimizer, self._scheduler),
+            compute_metrics=compute_metrics
         )
 
         trainer.train()
+
+        self._scorer.draw_total_result()
 
     def test(self, test_dataset, batch_size=64, collate_fn=None):
         dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
