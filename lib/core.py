@@ -240,9 +240,9 @@ class Core:
                                                   range(world_size)] if is_main else None
                                     loss_list = [torch.zeros_like(loss) for _ in range(world_size)] if is_main else None
 
-                                    dist.gather(outputs, output_list)
-                                    dist.gather(labels, label_list)
-                                    dist.gather(loss, loss_list)
+                                    dist.gather(outputs, output_list if is_main else None)
+                                    dist.gather(labels, label_list if is_main else None)
+                                    dist.gather(loss, loss_list if is_main else None)
 
                                     if is_main:
                                         outputs = torch.concatenate(output_list, dim=0)
