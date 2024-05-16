@@ -156,12 +156,12 @@ class Core:
         self.__verbose = self.__verbose and is_main
 
         train_sampler = DistributedSampler(dataset, shuffle=False)
-        # valid_sampler = DistributedSampler(dataset_val, shuffle=False)
+        valid_sampler = DistributedSampler(dataset_val, shuffle=False)
 
         dist_batch_size = int(batch_size / world_size)
         train_dataloader = DataLoader(dataset, batch_size=dist_batch_size, shuffle=False, sampler=train_sampler,
                                       collate_fn=collate_fn if collate_fn is not None else self._default_collate)
-        val_dataloader = DataLoader(dataset_val, batch_size=batch_size, shuffle=False,  # sampler=valid_sampler,
+        val_dataloader = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, sampler=valid_sampler,
                                     collate_fn=collate_fn if collate_fn is not None else self._default_collate) if dataset_val is not None and is_main else None
         dataloaders_dict = {
             "train": train_dataloader,
@@ -189,13 +189,13 @@ class Core:
                 train = phase == 'train'
                 data_loader = dataloaders_dict[phase]
                 if model is not None:
+                    data_loader.sampler.set_epoch(epoch)
                     if train:
                         model.train()  # set network 'train' mode
-                        data_loader.sampler.set_epoch(epoch)
                     else:
                         model.eval()  # set network 'val' mode
 
-                if data_loader is not None and (train or is_main):
+                if data_loader is not None:
                     # batch loop
                     with tqdm(data_loader, disable=not self.__verbose) as pbar:
                         pbar.set_description(f'Epoch: {epoch}')
