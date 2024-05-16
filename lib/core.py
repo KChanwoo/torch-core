@@ -1,5 +1,6 @@
 import copy
 import os
+import random
 from typing import Union
 
 import numpy as np
@@ -149,7 +150,15 @@ class Core:
 
     def dist_train(self, rank: int, world_size: int, dataset: Dataset, dataset_val: Union[Dataset, None], batch_size=64,
                    num_epochs=1000,
-                   collate_fn=None, early_stopping=None):
+                   collate_fn=None, early_stopping=None, seed=42):
+        # set same seed to all gpus
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
         device_id = rank % world_size
         is_main = rank == 0
 
