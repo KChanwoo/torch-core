@@ -71,7 +71,7 @@ class Scorer:
         self.reset_epoch()
         return epoch_loss, epoch_loss, epoch_loss
 
-    def draw_total_result(self):
+    def draw_total_result(self, title='Train'):
         fig, ax = plt.subplots(facecolor="w")
 
         if len(self._accuracy_list) > 0:
@@ -84,9 +84,9 @@ class Scorer:
         plt.xlim(0, len(self._loss_list))
 
         ax.legend()
-        save_fig = os.path.join(self._base_path, 'fig.png')
+        save_fig = os.path.join(self._base_path, '{}_fig.png'.format(title))
         self.show(plt, save_fig)
-
+        self._save_num = 0
         return self._loss_list, self._accuracy_list, self._score_list
 
     def get_outputs(self):

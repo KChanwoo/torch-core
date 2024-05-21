@@ -90,7 +90,7 @@ class Core:
             ModelCheckpoint(
                 monitor='avg_val_loss',
                 dirpath=self._base_path,
-                filename='weight_train.pt',
+                filename='weight_train',
                 save_top_k=1,
                 mode='min'
             )
@@ -129,7 +129,7 @@ class Core:
             logger=False
         )
 
-        self.load(self.save_path)
+        self.load()
 
         data_module = PLDataModule(test_dataset=test_dataset,
                                    collate_fn=collate_fn if collate_fn is not None else self._default_collate)
@@ -144,9 +144,13 @@ class Core:
 
         return output_list, pred
 
-    def load(self, pt_path):
-        self._model.load_state_dict(
-            torch.load(pt_path, map_location=self._device))
+    def predict(self, x):
+        self.load()
+        return self._model(x)
+
+    def load(self):
+        self._train_model = PLModel.load_from_checkpoint(os.path.join(self._base_path, "weight_train.ckpt"), core=self)
+        self._model = self._train_model.model
 
     def save(self, pt_path):
         torch.save(self._model.state_dict(), pt_path)

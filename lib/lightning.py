@@ -32,7 +32,7 @@ class PLModel(L.LightningModule):
 
     def test_step(self, batch, batch_idx):
         inputs, labels = batch
-        outputs, loss = self.core.train_step(self.model(), inputs, labels)
+        outputs, loss = self.core.train_step(self.model, inputs, labels)
         self.core.get_scorer().add_batch_result(outputs, labels, loss)
         self.log('test_loss', loss, prog_bar=True)
 
@@ -50,7 +50,7 @@ class PLModel(L.LightningModule):
 
     def on_test_end(self):
         self.core.get_scorer().get_epoch_result(True, True, title='Test')
-        self.core.get_scorer().draw_total_result()
+        self.core.get_scorer().draw_total_result("Test")
 
 
 class GanPLModel(PLModel):
