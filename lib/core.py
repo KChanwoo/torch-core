@@ -42,7 +42,10 @@ class Core:
 
         self.__verbose = verbose
         if not os.path.exists(base_path):
-            os.makedirs(base_path)
+            try:
+                os.makedirs(base_path)
+            except FileExistsError as e:
+                pass
 
         self.save_path = os.path.join(self._base_path, 'weight_train.pt')
         self.save_path_hf = os.path.join(self._base_path, 'model.safetensors')
@@ -131,7 +134,7 @@ class Core:
 
         self.load()
 
-        data_module = PLDataModule(test_dataset=test_dataset,
+        data_module = PLDataModule(test_dataset=test_dataset, batch_size=batch_size,
                                    collate_fn=collate_fn if collate_fn is not None else self._default_collate)
 
         trainer.test(self._train_model, data_module)
