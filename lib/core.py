@@ -102,8 +102,8 @@ class Core:
         if self.__early_stopping:
             callbacks.append(
                 EarlyStopping(
-                    monitor='val_loss',
-                    patience=7,
+                    monitor='avg_val_loss',
+                    patience=5,
                     verbose=True,
                     mode='min'
                 )
