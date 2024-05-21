@@ -14,7 +14,9 @@ setup(
         "matplotlib",
         "pandas",
         "torchvision",
-        "tqdm"
+        "tqdm",
+        "lightning",
+        "tensorboard"
     ],
     packages=find_packages(exclude=['docs', 'tests*']),
     keywords=['ai', 'pytorch'],

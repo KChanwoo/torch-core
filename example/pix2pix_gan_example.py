@@ -197,37 +197,28 @@ class PixGanCore(GanCore):
         self._test_dataset = test_dataset
         self._loader = None
 
-    def train_step(self, inputs, labels, train=False):
+    def train_step(self, model, inputs, labels, d_train=False):
         # the goal is make b using a
         a, b = inputs, labels
         num_batch = a.shape[0]
         label_valid = self.create_real_label(num_batch)
-        label_fake = self.create_fake_label(num_batch)
 
-        fake_b = self._model_g(a)
+        with torch.set_grad_enabled(False):
+            fake_b = self._model_g(a)
 
-        if train:
-            self._model_d.get_model().zero_grad()
-        output_real, loss_real = self._model_d.train_step([a, b], label_valid, False)
-        output_fake, loss_fake = self._model_d.train_step([a, fake_b.detach()], label_fake, False)
+        if d_train:
+            label_fake = self.create_fake_label(num_batch)
 
-        full_loss = (loss_real + loss_fake) * .5
+            output_real, loss_real = self._model_d.train_step([a, b], label_valid, False)
+            output_fake, loss_fake = self._model_d.train_step([a, fake_b.detach()], label_fake, False)
 
-        if train:
-            full_loss.backward()
-            self._model_d.get_optim().step()
+            output_, total_loss = output_fake, (loss_real + loss_fake) * .5
+        else:
 
-        if train:
-            self._model_g.get_model().zero_grad()
-            self._model_d.get_model().zero_grad()
+            output_, loss_ = self._model_d.train_step([a, fake_b], label_valid, False)  # MSE loss
+            loss = self._model_g.get_criterion()(fake_b, b)  # L1 loss
 
-        output_, loss_ = self._model_d.train_step([a, fake_b], label_valid, False)  # MSE loss
-        loss = self._model_g.get_criterion()(fake_b, b)  # L1 loss
-
-        total_loss = loss_ + loss * 100
-        if train:
-            total_loss.backward()
-            self._model_g.get_optim().step()
+            total_loss = loss_ + loss * 100
 
         return output_, total_loss
 

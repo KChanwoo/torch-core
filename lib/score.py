@@ -95,6 +95,9 @@ class Scorer:
     def get_preds(self):
         return self._preds_list
 
+    def get_loss(self):
+        return self._loss_list
+
 
 class BinaryScorer(Scorer):
     def __init__(self, base_path, show=False, do_sigmoid=True):

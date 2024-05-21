@@ -1,6 +1,7 @@
 import copy
 import os
 import random
+from abc import ABC
 from typing import Union
 
 import numpy as np
@@ -11,9 +12,15 @@ from torch.utils.data import Dataset, DataLoader, DistributedSampler
 from tqdm import tqdm
 
 from lib.EarlyStopping import EarlyStopping, EarlyStoppingMode
+from lib.lightning import PLDataModule, PLModel
 from lib.score import Scorer, GanScorer
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
+
+import lightning as L
+from lightning import Trainer
+from lightning.pytorch.loggers import TensorBoardLogger
+from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 
 
 class Core:
@@ -38,32 +45,23 @@ class Core:
             os.makedirs(base_path)
 
         self.save_path = os.path.join(self._base_path, 'weight_train.pt')
+        self.save_path_hf = os.path.join(self._base_path, 'model.safetensors')
+
+        self._train_model = PLModel(self)
 
     def __log(self, *args):
         if self.__verbose:
             print(*args)
 
-    def train_step(self, model, inputs, labels, train=False):
-        # initialize optimizer
-        if train:
-            self._optimizer.zero_grad()
+    def train_step(self, model, inputs, labels):
 
         if self._scaler is None:
             outputs = model(inputs)
             loss = self._loss(outputs, labels)  # calculate loss
-
-            if train:
-                loss.backward()
-                self._optimizer.step()
         else:
             with torch.cuda.amp.autocast():
                 outputs = model(inputs)
                 loss = self._loss(outputs, labels)  # calculate loss
-
-            if train:
-                self._scaler.scale(loss).backward()
-                self._scaler.step(self._optimizer)
-                self._scaler.update()
 
         return outputs, loss
 
@@ -86,310 +84,60 @@ class Core:
     def after_epoch_one(self, phase):
         return self._scorer.get_epoch_result(phase == 'val', phase == 'val')
 
-    def train(self, dataset: Dataset, dataset_val: Union[Dataset, None], batch_size=64, num_epochs=1000,
-              collate_fn=None, early_stopping=None):
-        train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True,
-                                      collate_fn=collate_fn if collate_fn is not None else self._default_collate)
-        val_dataloader = DataLoader(dataset_val, batch_size=batch_size, shuffle=True,
-                                    collate_fn=collate_fn if collate_fn is not None else self._default_collate) if dataset_val is not None else None
-        dataloaders_dict = {
-            "train": train_dataloader,
-            "val": val_dataloader
-        }
+    def train(self, dataset: Dataset, dataset_val: Union[Dataset, None], world_size: int = 1, batch_size=64,
+              num_epochs=1000, collate_fn=None):
+        callbacks = [
+            ModelCheckpoint(
+                monitor='avg_val_loss',
+                dirpath=self._base_path,
+                filename='weight_train.pt',
+                save_top_k=1,
+                mode='min'
+            )
+        ]
 
-        early_stopping = early_stopping if early_stopping is not None else \
-            EarlyStopping(patience=5, verbose=True, path=self.save_path,
-                          mode=self._early_stopping_mode) if self.__early_stopping else None
+        if self.__early_stopping:
+            callbacks.append(
+                EarlyStopping(
+                    monitor='val_loss',
+                    patience=7,
+                    verbose=True,
+                    mode='min'
+                )
+            )
 
-        if self._model is not None:
-            self._model.to(self._device)
+        logger = TensorBoardLogger(self._base_path, name="model_logs")
 
-        self.__log("using device：", self._device)
-        for epoch in range(num_epochs + 1):
-            self.__log('Epoch {}/{}'.format(epoch, num_epochs))
-            self.__log('-------------')
-            for phase in [key for key in dataloaders_dict.keys()]:
-                train = phase == 'train'
-                if self._model is not None:
-                    if train:
-                        self._model.train()  # set network 'train' mode
-                    else:
-                        self._model.eval()  # set network 'val' mode
-
-                data_loader = dataloaders_dict[phase]
-                if data_loader is not None:
-                    # batch loop
-                    with tqdm(dataloaders_dict[phase]) as pbar:
-                        pbar.set_description(f'Epoch: {epoch}')
-                        for inputs, labels in pbar:
-                            inputs = inputs.to(self._device)
-                            labels = labels.to(self._device)
-
-                            # forward
-                            with torch.set_grad_enabled(train):
-                                outputs, loss = self.train_step(self._model, inputs, labels, train)
-                                # _, preds = torch.max(reshaped, 1)  # predict
-                                # back propagtion
-
-                                iter_loss = self._scorer.add_batch_result(outputs, labels, loss)
-
-                            pbar.set_postfix(loss=iter_loss, lr=self._optimizer.param_groups[0]['lr'])
-                        self.__log("{} result:".format(phase))
-
-                with torch.set_grad_enabled(False):
-                    epoch_loss, epoch_acc, epoch_score = self.after_epoch_one(phase)
-
-                if not train:
-                    # check early stopping
-
-                    if self._early_stopping_mode == EarlyStoppingMode.LOSS:
-                        value = epoch_loss
-                    elif self._early_stopping_mode == EarlyStoppingMode.ACCU:
-                        value = epoch_acc
-                    else:
-                        value = epoch_score
-
-                    early_stopping(value,
-                                   self._model) if early_stopping is not None and self._model is not None else torch.save(
-                        self._model, self.save_path)
-                elif self._scheduler is not None:
-                    self._scheduler.step()
-
-                if not train and early_stopping is not None and early_stopping.early_stop:
-                    self.__log("Early stopping")
-                    break
-
-        self._scorer.draw_total_result()
-
-    def dist_train(self, rank: int, world_size: int, dataset: Dataset, dataset_val: Union[Dataset, None], batch_size=64,
-                   num_epochs=1000,
-                   collate_fn=None, early_stopping=None, seed=42):
-        # set same seed to all gpus
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        np.random.seed(seed)
-        random.seed(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
-        device_id = rank % world_size
-        is_main = rank == 0
-
-        self.__verbose = self.__verbose and is_main
-
-        train_sampler = DistributedSampler(dataset, shuffle=False)
-        valid_sampler = DistributedSampler(dataset_val, shuffle=False)
-
-        dist_batch_size = int(batch_size / world_size)
-        train_dataloader = DataLoader(dataset, batch_size=dist_batch_size, shuffle=False, sampler=train_sampler,
-                                      collate_fn=collate_fn if collate_fn is not None else self._default_collate)
-        val_dataloader = DataLoader(dataset_val, batch_size=dist_batch_size, shuffle=False, sampler=valid_sampler,
-                                    collate_fn=collate_fn if collate_fn is not None else self._default_collate) if dataset_val is not None else None
-        dataloaders_dict = {
-            "train": train_dataloader,
-            "val": val_dataloader
-        }
-
-        early_stopping = early_stopping if early_stopping is not None else \
-            EarlyStopping(patience=5, verbose=True, path=self.save_path) if self.__early_stopping else None
-
-        model = None
-        if self._model is not None:
-            self._model.to(device_id)
-            model = DDP(self._model, device_ids=[device_id])
-
-        self.__log("using device：", self._device)
-
-        sync_early_stop = torch.tensor(0, device=device_id)
-        for epoch in range(num_epochs + 1):
-            self.__log('Epoch {}/{}'.format(epoch, num_epochs))
-            self.__log('-------------')
-            for phase in [key for key in dataloaders_dict.keys()]:
-                if sync_early_stop != 0:
-                    break
-
-                train = phase == 'train'
-                data_loader = dataloaders_dict[phase]
-                if model is not None:
-                    data_loader.sampler.set_epoch(epoch)
-                    if train:
-                        model.train()  # set network 'train' mode
-                    else:
-                        model.eval()  # set network 'val' mode
-
-                if data_loader is not None:
-                    # batch loop
-                    with tqdm(data_loader, disable=not self.__verbose) as pbar:
-                        pbar.set_description(f'Epoch: {epoch}')
-                        for inputs, labels in pbar:
-                            if sync_early_stop != 0:
-                                break
-                            inputs = inputs.to(device_id)
-                            labels = labels.to(device_id)
-
-                            # forward
-                            with torch.set_grad_enabled(train):
-                                local_model = model if train else model.module
-                                outputs, loss = self.train_step(local_model, inputs, labels, train)
-                                # _, preds = torch.max(reshaped, 1)  # predict
-                                # back propagtion
-
-                                if train:
-                                    output_list = [torch.zeros_like(outputs) for _ in
-                                                   range(world_size)] if is_main else None
-                                    label_list = [torch.zeros_like(labels) for _ in
-                                                  range(world_size)] if is_main else None
-                                    loss_list = [torch.zeros_like(loss) for _ in range(world_size)] if is_main else None
-
-                                    dist.gather(outputs, output_list if is_main else None)
-                                    dist.gather(labels, label_list if is_main else None)
-                                    dist.gather(loss, loss_list if is_main else None)
-
-                                    if is_main:
-                                        outputs = torch.concatenate(output_list, dim=0)
-                                        labels = torch.concatenate(label_list, dim=0)
-                                        loss = torch.mean(torch.stack(loss_list), dim=0)
-
-                                iter_loss = self._scorer.add_batch_result(outputs, labels, loss) if is_main else 0
-
-                            pbar.set_postfix(loss=iter_loss, lr=self._optimizer.param_groups[0]['lr'])
-
-                with torch.set_grad_enabled(False):
-                    self.__log("{} result:".format(phase))
-                    if is_main:
-                        epoch_loss, epoch_acc, epoch_score = self.after_epoch_one(phase)
-
-            if self._scheduler is not None:
-                self._scheduler.step()
-
-            if is_main:
-                # check early stopping
-                early_stopping(epoch_loss,
-                               model.module) if early_stopping is not None and model is not None else torch.save(
-                    model.module, self.save_path)
-
-                sync_early_stop = torch.tensor(1 if early_stopping is not None and early_stopping.early_stop else 0,
-                                               device=device_id)
-
-            # synchronize variable for early stop to all devices
-            dist.broadcast(sync_early_stop, 0)
-
-            if sync_early_stop != 0:
-                self.__log("Early stopping")
-                break
-
-        if is_main:
-            self._scorer.draw_total_result()
-
-    def train_hf(self, world_size, config, dataset: Dataset, dataset_val: Union[Dataset, None], batch_size=64,
-                 num_epochs=1000):
-
-        try:
-            from transformers import TrainingArguments, PreTrainedModel, PretrainedConfig, Trainer, EarlyStoppingCallback
-        except:
-            raise Exception("need transformers if you want to use train_hf")
-
-        training_args = TrainingArguments(
-            output_dir=self._base_path,
-            evaluation_strategy="epoch",
-            save_strategy="epoch",
-            logging_strategy='epoch',
-            learning_rate=2e-5,
-            per_device_train_batch_size=int(batch_size / world_size),
-            per_device_eval_batch_size=int(batch_size / world_size),
-            num_train_epochs=num_epochs,
-            weight_decay=0.01,
-            load_best_model_at_end=True,
-            metric_for_best_model="eval_loss",
-            greater_is_better=False,
-            ddp_find_unused_parameters=False
-        )
-
-        def compute_metrics(p):
-            pred = torch.tensor(p.predictions)
-            label = torch.tensor(p.label_ids)
-            self._scorer.add_batch_result(pred, label, torch.tensor(0))
-            loss__, acc__, f1__ = self._scorer.get_epoch_result(True, True)
-            return {'AUC': acc__, 'F1': f1__}
-
-        class CustomModelForSequenceClassification(PreTrainedModel):
-            def __init__(self, config, model, loss_fct):
-                super().__init__(config)
-                self.model = model
-                self.loss_fct = loss_fct
-
-            def forward(self, input_ids=None, labels=None):
-                logits = self.model(input_ids)
-                loss = None
-                if labels is not None:
-                    loss = self.loss_fct(logits, labels)
-                output = (logits,)
-                return ((loss,) + output) if loss is not None else output
-
-        callback = []
-        if self._early_stopping_mode:
-            callback.append(EarlyStoppingCallback(
-                early_stopping_patience=5
-            ))
-
-        model_hf = CustomModelForSequenceClassification(config, self._model, self._loss)
         trainer = Trainer(
-            model=model_hf,
-            args=training_args,
-            train_dataset=dataset,
-            eval_dataset=dataset_val,
-            callbacks=callback,
-            optimizers=(self._optimizer, self._scheduler),
-            compute_metrics=compute_metrics
+            max_epochs=num_epochs,
+            accelerator='gpu' if torch.backends.cuda.is_built() else 'mps' if torch.backends.mps.is_built() else 'cpu',
+            devices=world_size,
+            callbacks=callbacks,
+            logger=logger,
+            check_val_every_n_epoch=1 if dataset_val is not None else 0  # validation 주기 설정
         )
 
-        trainer.train()
+        data_module = PLDataModule(train_dataset=dataset, valid_dataset=dataset_val,
+                                   collate_fn=collate_fn if collate_fn is not None else self._default_collate)
 
-        self._scorer.draw_total_result()
+        trainer.fit(self._train_model, data_module)
 
-    def test(self, test_dataset, batch_size=64, collate_fn=None):
-        dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
-                                collate_fn=collate_fn if collate_fn is not None else self._default_collate)
-        self.__log("using device：", self._device)
+    def test(self, test_dataset: Dataset, world_size: int = 1, batch_size: int = 64, collate_fn=None):
+        trainer = Trainer(
+            accelerator='gpu' if torch.backends.cuda.is_built() else 'mps' if torch.backends.mps.is_built() else 'cpu',
+            devices=world_size,
+            logger=False
+        )
 
-        self._model.to(self._device)
         self.load(self.save_path)
-        self._model.eval()  # set network 'val' mode
 
-        # batch loop
-        for inputs, labels in tqdm(dataloader, disable=not self.__verbose):
-            # send data to GPU
-            inputs = inputs.to(self._device)
-            labels = labels.to(self._device)
+        data_module = PLDataModule(test_dataset=test_dataset,
+                                   collate_fn=collate_fn if collate_fn is not None else self._default_collate)
 
-            # forward
-            with torch.set_grad_enabled(False):
-                outputs, loss = self.train_step(self._model, inputs, labels, False)
-                self._scorer.add_batch_result(outputs, labels, loss)
+        trainer.test(self._train_model, data_module)
 
-        self._scorer.get_epoch_result(True, True, True, "test")
-        self._scorer.draw_total_result()
-
-    def predict_dataset(self, dataset, batch_size=64, collate_fn=None):
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False,
-                                collate_fn=collate_fn if collate_fn is not None else self._default_collate)
-        self.__log("using device：", self._device)
-
-        self._model.to(self._device)
-        self.load(self.save_path)
-        self._model.eval()  # set network 'val' mode
-
-        # batch loop
-        for inputs, labels in tqdm(dataloader, disable=not self.__verbose):
-            # send data to GPU
-            inputs = inputs.to(self._device)
-            labels = labels.to(self._device)
-
-            # forward
-            with torch.set_grad_enabled(False):
-                outputs, loss = self.train_step(self._model, inputs, labels, False)
-                self._scorer.add_batch_result(outputs, labels, loss)
-
+    def predict_dataset(self, dataset: Dataset, world_size: int = 1, batch_size=64, collate_fn=None):
+        self.test(dataset, world_size, batch_size, collate_fn)
         pred = copy.deepcopy(self._scorer.get_preds())
         output_list = copy.deepcopy(self._scorer.get_outputs())
         self._scorer.reset_epoch()
@@ -411,6 +159,12 @@ class Core:
 
     def get_criterion(self):
         return self._loss
+
+    def get_scorer(self):
+        return self._scorer
+
+    def get_scheduler(self):
+        return self._scheduler
 
     def __call__(self, *args, **kwargs):
         return self._model(*args, **kwargs)
@@ -452,40 +206,34 @@ class GanCore(Core):
     def create_seed(self, num_batch):
         return torch.randn(num_batch, *self._seed_shape, device=self._device, dtype=torch.float32)
 
-    def train_step(self, model, inputs, labels, train=False):
+    def train_step(self, model, inputs, labels, d_train=True):
         num_batch = inputs.shape[0]
         seed = self.create_seed(num_batch)
-        data_gan = self._model_g(seed)
 
-        self._model_g.get_model().eval()
+        with torch.set_grad_enabled(False):
+            data_gan = self._model_g(seed)
 
-        if GanCore.flip_coin():
-            data = inputs
-            label = self.create_real_label(num_batch)
+        if d_train:
+
+            if GanCore.flip_coin():
+                data = inputs
+                label = self.create_real_label(num_batch)
+            else:
+                data = data_gan.detach()
+                label = self.create_fake_label(num_batch)
+            outputs, loss = self._model_d.train_step(self._model_d, data, label)
         else:
-            data = data_gan.detach()
-            label = self.create_fake_label(num_batch)
+            if GanCore.flip_coin(.9):
+                label_gan = self.create_real_label(num_batch)
+            else:
+                label_gan = self.create_fake_label(num_batch)
 
-        self._model_d.get_model().train()
-        self._model_d.train_step(self._model_d, data, label, train)
+            outputs, loss = self._model_d.train_step(self._model_d, data_gan, label_gan)
+            loss = self._loss(outputs, label_gan)
 
-        if GanCore.flip_coin(.9):
-            label_gan = self.create_real_label(num_batch)
-        else:
-            label_gan = self.create_fake_label(num_batch)
-
-        if train:
-            self._model_g.get_model().zero_grad()
-
-        outputs, loss = self._model_d.train_step(self._model_d, data_gan, label_gan, False)
-        loss = self._loss(outputs, label_gan)
-
-        if train:
-            loss.backward()
-            self._optimizer.step()
         return outputs, loss
 
-    def train(self, dataset: Dataset, dataset_val: Dataset = None, batch_size=64, num_epochs=1000, collate_fn=None):
+    def train(self, dataset: Dataset, dataset_val: Dataset = None, world_size: int = 1, batch_size=64, num_epochs=1000, collate_fn=None):
         self._model_g.get_model().to(self._device)
         self._model_d.get_model().to(self._device)
         super(GanCore, self).train(dataset, None, batch_size, num_epochs, collate_fn)
@@ -493,3 +241,9 @@ class GanCore(Core):
     def generate(self, number=1):
         seed = self.create_seed(number)
         return self._model_g(seed)
+
+    def get_g_model(self):
+        return self._model_g
+
+    def get_d_model(self):
+        return self._model_d
