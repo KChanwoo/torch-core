@@ -102,7 +102,8 @@ class Core:
                     monitor='avg_val_loss',
                     patience=5,
                     verbose=True,
-                    mode='min'
+                    mode='min',
+                    log_rank_zero_only=True
                 )
             )
 
