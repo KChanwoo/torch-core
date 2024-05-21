@@ -11,7 +11,6 @@ from torch.optim import Optimizer
 from torch.utils.data import Dataset, DataLoader, DistributedSampler
 from tqdm import tqdm
 
-from lib.EarlyStopping import EarlyStopping, EarlyStoppingMode
 from lib.lightning import PLDataModule, PLModel
 from lib.score import Scorer, GanScorer
 import torch.distributed as dist
@@ -26,14 +25,12 @@ from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 class Core:
     def __init__(self, base_path: str, model: Union[None, torch.nn.Module], optimizer: Union[None, Optimizer],
                  loss: Union[None, torch.nn.Module], scheduler=Union[None, torch.optim.lr_scheduler.LRScheduler],
-                 scorer: Scorer = None, early_stopping: bool = True, verbose: bool = True, show_fig=False,
-                 early_stopping_mode=EarlyStoppingMode.LOSS, use_amp=False):
+                 scorer: Scorer = None, early_stopping: bool = True, verbose: bool = True, show_fig=False, use_amp=False):
         self._model = model
         self._base_path = base_path
         self._optimizer = optimizer
         self._scheduler = scheduler
         self.__early_stopping = early_stopping
-        self._early_stopping_mode = early_stopping_mode
         self._loss = loss
         self._scorer = scorer if scorer is not None else Scorer(self._base_path, show_fig)
         self._scaler = torch.cuda.amp.GradScaler() if torch.backends.cuda.is_built() and use_amp else None

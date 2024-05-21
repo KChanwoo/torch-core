@@ -26,7 +26,7 @@ class PLModel(L.LightningModule):
         inputs, labels = batch
         outputs, loss = self.core.train_step(self.model, inputs, labels)
         self.core.get_scorer().add_batch_result(outputs, labels, loss)
-        self.log('val_loss', loss, prog_bar=True)
+        self.log('val_loss', loss, prog_bar=True, sync_dist=True)
 
         return loss
 
@@ -34,7 +34,7 @@ class PLModel(L.LightningModule):
         inputs, labels = batch
         outputs, loss = self.core.train_step(self.model, inputs, labels)
         self.core.get_scorer().add_batch_result(outputs, labels, loss)
-        self.log('test_loss', loss, prog_bar=True)
+        self.log('test_loss', loss, prog_bar=True, sync_dist=True)
 
         return loss
 
@@ -46,7 +46,7 @@ class PLModel(L.LightningModule):
 
     def on_validation_epoch_end(self):
         loss, auc, score = self.core.get_scorer().get_epoch_result(True, True)
-        self.log('avg_val_loss', loss, prog_bar=True)
+        self.log('avg_val_loss', loss, prog_bar=True, sync_dist=True)
 
     def on_test_end(self):
         self.core.get_scorer().get_epoch_result(True, True, title='Test')
