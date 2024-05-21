@@ -4,26 +4,27 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from lib.core import GanCore
+    from lib.core import Core, GanCore
 
 
 class PLModel(L.LightningModule):
-    def __init__(self, core):
+    def __init__(self, core: 'Core'):
         super(PLModel, self).__init__()
         self.core = core
+        self.model = core.get_model()
 
     def forward(self, x):
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
         inputs, labels = batch
-        outputs, loss = self.core.train_step(self.core.get_model(), inputs, labels)
+        outputs, loss = self.core.train_step(self.model, inputs, labels)
         self.log('train_loss', loss)
         return loss
 
     def validation_step(self, batch, batch_idx):
         inputs, labels = batch
-        outputs, loss = self.core.train_step(self.core.get_model(), inputs, labels)
+        outputs, loss = self.core.train_step(self.model, inputs, labels)
         self.core.get_scorer().add_batch_result(outputs, labels, loss)
         self.log('val_loss', loss, prog_bar=True)
 
@@ -31,7 +32,7 @@ class PLModel(L.LightningModule):
 
     def test_step(self, batch, batch_idx):
         inputs, labels = batch
-        outputs, loss = self.core.train_step(self.core.get_model(), inputs, labels)
+        outputs, loss = self.core.train_step(self.model(), inputs, labels)
         self.core.get_scorer().add_batch_result(outputs, labels, loss)
         self.log('test_loss', loss, prog_bar=True)
 
@@ -44,7 +45,8 @@ class PLModel(L.LightningModule):
         self.core.get_scorer().draw_total_result()
 
     def on_validation_epoch_end(self):
-        self.core.get_scorer().get_epoch_result(True, True)
+        loss, auc, score = self.core.get_scorer().get_epoch_result(True, True)
+        self.log('avg_val_loss', loss, prog_bar=True)
 
     def on_test_end(self):
         self.core.get_scorer().get_epoch_result(True, True, title='Test')
