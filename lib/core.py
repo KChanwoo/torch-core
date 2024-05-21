@@ -117,7 +117,7 @@ class Core:
             check_val_every_n_epoch=1 if dataset_val is not None else 0  # validation 주기 설정
         )
 
-        data_module = PLDataModule(train_dataset=dataset, valid_dataset=dataset_val,
+        data_module = PLDataModule(train_dataset=dataset, valid_dataset=dataset_val, batch_size=batch_size,
                                    collate_fn=collate_fn if collate_fn is not None else self._default_collate)
 
         trainer.fit(self._train_model, data_module)
