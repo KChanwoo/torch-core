@@ -41,6 +41,15 @@ class PLModel(L.LightningModule):
     def configure_optimizers(self):
         return [self.core.get_optim()], [self.core.get_scheduler()] if self.core.get_scheduler() is not None else []
 
+    def on_train_start(self) -> None:
+        self.core.get_scorer().reset_epoch()
+
+    def on_test_start(self) -> None:
+        self.core.get_scorer().reset_epoch()
+
+    def on_validation_start(self) -> None:
+        self.core.get_scorer().reset_epoch()
+
     def on_train_end(self):
         self.core.get_scorer().draw_total_result()
 

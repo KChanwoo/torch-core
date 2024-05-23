@@ -68,7 +68,6 @@ class Scorer:
 
                 f.writelines(lines)
 
-        self.reset_epoch()
         return epoch_loss, epoch_loss, epoch_loss
 
     def draw_total_result(self, title='Train'):
@@ -151,7 +150,6 @@ class BinaryScorer(Scorer):
                 f.writelines(lines)
 
         print('Loss: {:.4f} Acc: {:.4f} F1: {:.4f}'.format(epoch_loss, epoch_acc, epoch_f1))
-        self.reset_epoch()
 
         return epoch_loss, epoch_acc, epoch_f1
 
@@ -222,7 +220,6 @@ class MulticlassScorer(Scorer):
 
         print('Loss: {:.4f} Acc: {:.4f} F1: {:.4f}'.format(epoch_loss, epoch_acc, epoch_f1))
 
-        self.reset_epoch()
         return epoch_loss, epoch_acc, epoch_f1
 
 
@@ -265,7 +262,6 @@ class MSEScorer(Scorer):
                 f.writelines(lines)
 
         print('Loss: {:.4f} MSE: {:.4f}'.format(epoch_loss, epoch_mse))
-        self.reset_epoch()
 
         return epoch_loss, epoch_mse, math.sqrt(epoch_mse)
 
@@ -302,5 +298,4 @@ class GanScorer(Scorer):
         if len(self._output_list) > 0:
             epoch_loss = self._epoch_loss / len(self._output_list)
             print('Loss: {:.4f}'.format(epoch_loss))
-        self.reset_epoch()
         return 0, 0, 0

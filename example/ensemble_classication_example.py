@@ -74,4 +74,4 @@ ensemble_core = VoteEnsemble("./result/ensemble",
                              weight=[.78, .87, .81])
 
 # ensemble_core.train(mnist_train, mnist_test, num_epochs=5)
-ensemble_core.test(mnist_test, test_all=True)
+ensemble_core.predict_datasets([mnist_test, mnist_test, mnist_test])

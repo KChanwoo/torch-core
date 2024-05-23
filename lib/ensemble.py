@@ -101,7 +101,7 @@ class VoteEnsemble(Core):
 
         return result
 
-    def train(self, dataset: Dataset, dataset_val: Union[Dataset, None], batch_size=64, num_epochs=1000,
+    def train(self, dataset: Dataset, dataset_val: Union[Dataset, None], world_size=1, batch_size=64, num_epochs=1000,
               collate_fn=None, bagging=False):
 
         n_model = len(self.models)
@@ -113,13 +113,13 @@ class VoteEnsemble(Core):
             subs = [dataset for i in range(n_model)]
 
         for sub_dataset, model in zip(subs, self.models):
-            model.train(sub_dataset, dataset_val, batch_size, num_epochs, collate_fn)
+            model.train(sub_dataset, dataset_val, world_size=world_size, batch_size=batch_size, num_epochs=num_epochs, collate_fn=collate_fn)
 
     def _dataset_loop(self, test_dataloader):
         device = torch.device(self._device)
 
         for model in self.models:
-            model.load(model.save_path)
+            model.load()
             model.get_model().to(device)
             model.get_model().eval()
 
@@ -134,11 +134,11 @@ class VoteEnsemble(Core):
             with torch.set_grad_enabled(False):
                 for i, model in enumerate(self.models):
                     weight = 1. if self.weight is None else self.weight[i]
-                    outputs, loss = model.train_step(model.get_model(), inputs, labels, False)
+                    outputs, loss = model.train_step(model.get_model(), inputs, labels)
                     output_all.append(outputs * weight)
                     loss_all += loss.item()
                 outputs = self.vote(output_all)
-                self._scorer.add_batch_result(outputs, labels, loss_all / len(self.models))
+                self._scorer.add_batch_result(outputs, labels, torch.tensor(loss_all / len(self.models)))
 
     def _datasets_loop(self, batch_size, test_dataset_list, collate_fn_list):
         assert len(self.models) == len(test_dataset_list), \
@@ -153,13 +153,14 @@ class VoteEnsemble(Core):
             test_dataset = test_dataset_list[i]
             weight = 1. if self.weight is None else self.weight[i]
             collate_fn = None if collate_fn_list is None else collate_fn_list[i]
-            model.load(model.save_path)
+            model.load()
             model.get_model().to(device)
             model.get_model().eval()
 
-            output_one_model, preds = model.predict_dataset(test_dataset, batch_size, collate_fn if collate_fn is not None else self._default_collate)
+            output_one_model, preds = model.predict_dataset(test_dataset, batch_size=batch_size,
+                                                            collate_fn=collate_fn if collate_fn is not None else self._default_collate)
 
-            output_all.append(torch.cat(output_one_model, dim=0) * weight)
+            output_all.append(torch.tensor(output_one_model) * weight)
             if len(label_all) == 0:
                 test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
                                              collate_fn=collate_fn if collate_fn is not None else self._default_collate)
@@ -168,7 +169,7 @@ class VoteEnsemble(Core):
                     label_all.append(labels.cpu())
 
         outputs = self.vote(output_all)
-        self._scorer.add_batch_result(outputs, torch.cat(label_all, dim=0), .0)
+        self._scorer.add_batch_result(outputs, torch.cat(label_all, dim=0), torch.tensor(.0))
 
     def test(self, test_dataset, batch_size=64, collate_fn=None, test_all=True):
         # test each models
@@ -177,13 +178,13 @@ class VoteEnsemble(Core):
                 model.test(test_dataset, batch_size, collate_fn)
 
         test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
-                                      collate_fn=collate_fn if collate_fn is not None else self._default_collate)
+                                     collate_fn=collate_fn if collate_fn is not None else self._default_collate)
         self._dataset_loop(test_dataloader)
 
         self._scorer.get_epoch_result(True, True, True, "test")
         self._scorer.draw_total_result()
 
-    def predict_dataset(self, test_dataset, batch_size=64, collate_fn=None):
+    def predict_dataset(self, test_dataset, world_size: int = 1, batch_size=64, collate_fn=None):
         test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
                                      collate_fn=collate_fn if collate_fn is not None else self._default_collate)
 
@@ -195,69 +196,14 @@ class VoteEnsemble(Core):
 
         return output_list, pred
 
-    def test_datasets(self, test_dataset_list: list[Dataset], batch_size=64, collate_fn_list: Union[list, None]=None):
+    def test_datasets(self, test_dataset_list: list[Dataset], batch_size=64, collate_fn_list: Union[list, None] = None):
         self._datasets_loop(batch_size, test_dataset_list, collate_fn_list)
 
         self._scorer.get_epoch_result(True, True, True, "test")
 
-    def predict_datasets(self, test_dataset_list: list[Dataset], batch_size=64, collate_fn_list: Union[list, None] = None):
+    def predict_datasets(self, test_dataset_list: list[Dataset], batch_size=64,
+                         collate_fn_list: Union[list, None] = None):
         self._datasets_loop(batch_size, test_dataset_list, collate_fn_list)
-
-        pred = copy.deepcopy(self._scorer.get_preds())
-        output_list = copy.deepcopy(self._scorer.get_outputs())
-        self._scorer.reset_epoch()
-
-        return output_list, pred
-
-    def predict_dataset_hf(self, test_dataset, batch_size=64, collate_fn=None):
-        output_all = []
-        label_all = []
-        for i in range(len(self.models)):
-            model = self.models[i]
-            weight = 1. if self.weight is None else self.weight[i]
-
-            output_one_model, preds = model.predict_dataset_hf(test_dataset, batch_size)
-            output_all.append(torch.cat(output_one_model, dim=0) * weight)
-
-            if len(label_all) == 0:
-                test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
-                                             collate_fn=collate_fn if collate_fn is not None else self._default_collate)
-                for inputs, labels in tqdm(test_dataloader):
-                    # send data to CPU
-                    label_all.append(labels.cpu())
-
-        outputs = self.vote(output_all)
-        self._scorer.add_batch_result(outputs, torch.cat(label_all, dim=0), .0)
-
-        pred = copy.deepcopy(self._scorer.get_preds())
-        output_list = copy.deepcopy(self._scorer.get_outputs())
-        self._scorer.reset_epoch()
-
-        return output_list, pred
-
-    def predict_datasets_hf(self, config_list: list, test_dataset_list: list[Dataset], batch_size=64, collate_fn_list: Union[list, None] = None):
-
-        output_all = []
-        label_all = []
-        for i in range(len(self.models)):
-            model = self.models[i]
-            weight = 1. if self.weight is None else self.weight[i]
-            test_dataset = test_dataset_list[i]
-            collate_fn = None if collate_fn_list is None else collate_fn_list[i]
-            config = config_list[i] if config_list is not None and i < len(config_list) else None
-
-            output_one_model, preds = model.predict_dataset_hf(config, test_dataset, batch_size)
-            output_all.append(torch.cat(output_one_model, dim=0) * weight)
-
-            if len(label_all) == 0:
-                test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
-                                             collate_fn=collate_fn if collate_fn is not None else self._default_collate)
-                for inputs, labels in tqdm(test_dataloader):
-                    # send data to CPU
-                    label_all.append(labels.cpu())
-
-        outputs = self.vote(output_all)
-        self._scorer.add_batch_result(outputs, torch.cat(label_all, dim=0), .0)
 
         pred = copy.deepcopy(self._scorer.get_preds())
         output_list = copy.deepcopy(self._scorer.get_outputs())
