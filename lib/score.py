@@ -91,6 +91,7 @@ class Scorer:
         if len(self._accuracy_list) > 0:
             ax.plot(range(len(self._accuracy_list)), self._accuracy_list, label="accuracy")
 
+        print(self._loss_list)
         ax.plot(range(len(self._loss_list)), self._loss_list, label="loss")
 
         if len(self._score_list) > 0:
