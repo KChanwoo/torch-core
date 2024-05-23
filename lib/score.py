@@ -43,7 +43,7 @@ class Scorer:
         self._preds_list.extend(outputs.tolist())
         self._output_list.extend(outputs.tolist())
         self._labels_list.extend(labels.tolist())
-        self._epoch_loss += batch_loss
+        self._epoch_loss += batch_loss.item() if torch.is_tensor(batch_loss) else batch_loss
 
         return self._epoch_loss / len(self._output_list)
 
@@ -70,28 +70,12 @@ class Scorer:
 
         return epoch_loss, epoch_loss, epoch_loss
 
-    def to_cpu(self):
-        if len(self._preds_list) > 0 and isinstance(self._preds_list[0], torch.Tensor):
-            self._preds_list = [pred.cpu() for pred in self._preds_list]
-
-        if len(self._output_list) > 0 and isinstance(self._output_list[0], torch.Tensor):
-            self._output_list = [output.cpu() for output in self._output_list]
-
-        if len(self._labels_list) > 0 and isinstance(self._labels_list[0], torch.Tensor):
-            self._labels_list = [label.cpu() for label in self._labels_list]
-
-        if isinstance(self._epoch_loss, torch.Tensor):
-            self._epoch_loss = self._epoch_loss.cpu()
-
     def draw_total_result(self, title='Train'):
-        self.to_cpu()
-
         fig, ax = plt.subplots(facecolor="w")
 
         if len(self._accuracy_list) > 0:
             ax.plot(range(len(self._accuracy_list)), self._accuracy_list, label="accuracy")
 
-        print(self._loss_list)
         ax.plot(range(len(self._loss_list)), self._loss_list, label="loss")
 
         if len(self._score_list) > 0:
