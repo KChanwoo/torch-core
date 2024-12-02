@@ -1,25 +1,18 @@
 import copy
 import os
-import random
-from abc import ABC
 from typing import Union
 
 import numpy as np
 import torch
+from lightning import Trainer
+from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
+from lightning.pytorch.loggers import TensorBoardLogger
 from torch import Tensor
 from torch.optim import Optimizer
-from torch.utils.data import Dataset, DataLoader, DistributedSampler
-from tqdm import tqdm
+from torch.utils.data import Dataset
 
 from lib.lightning import PLDataModule, PLModel
 from lib.score import Scorer, GanScorer
-import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
-
-import lightning as L
-from lightning import Trainer
-from lightning.pytorch.loggers import TensorBoardLogger
-from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 
 
 class Core:

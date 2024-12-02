@@ -1,9 +1,12 @@
+import itertools
+
 import math
 import os
 
+import numpy as np
 import torch
 from matplotlib import pyplot as plt
-from sklearn.metrics import roc_curve, f1_score, mean_squared_error
+from sklearn.metrics import roc_curve, f1_score, mean_squared_error, confusion_matrix
 from torch.nn.functional import one_hot
 
 
@@ -217,6 +220,26 @@ class MulticlassScorer(Scorer):
                 ]
 
                 f.writelines(lines)
+
+            cm = confusion_matrix(labels_total, self._preds_list)
+            # visualise it
+            plt.figure(figsize=(8, 8))
+            plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Greens)
+            plt.title("Confusion Matrix")
+            plt.colorbar()
+
+            tick_marks = np.arange(n_class)
+            plt.xticks(tick_marks, [str(label) for label in list(range(n_class))], rotation=45)
+            plt.yticks(tick_marks, [str(label) for label in list(range(n_class))])
+
+            thresh = cm.max() / 2
+            for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+                plt.text(i, j, cm[i, j], horizontalalignment='center', color='white' if cm[i, j] > thresh else 'red')
+
+            plt.tight_layout()
+            plt.xlabel('Predictions')
+            plt.ylabel('Real Values')
+            self.show(plt, os.path.join(self._base_path, "{0}_cm".format(title) + str(self._save_num) + ".png"))
 
         print('Loss: {:.4f} Acc: {:.4f} F1: {:.4f}'.format(epoch_loss, epoch_acc, epoch_f1))
 
