@@ -54,11 +54,11 @@ class PLModel(L.LightningModule):
         self.core.get_scorer().draw_total_result()
 
     def on_validation_epoch_end(self):
-        loss, auc, score = self.core.get_scorer().get_epoch_result(True, True)
+        loss, auc, score = self.core.get_scorer().get_epoch_result(True, True, False)
         self.log('avg_val_loss', loss, prog_bar=True, sync_dist=True)
 
     def on_test_end(self):
-        self.core.get_scorer().get_epoch_result(True, True, title='Test')
+        self.core.get_scorer().get_epoch_result(True, True, True, title='Test')
         self.core.get_scorer().draw_total_result("Test")
 
 

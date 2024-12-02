@@ -103,7 +103,6 @@ class Core:
         logger = TensorBoardLogger(self._base_path, name="model_logs")
 
         trainer = Trainer(
-            strategy='ddp' if world_size > 1 else None,
             max_epochs=num_epochs,
             accelerator='gpu' if torch.backends.cuda.is_built() else 'mps' if torch.backends.mps.is_built() else 'cpu',
             devices=world_size,
