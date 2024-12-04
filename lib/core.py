@@ -124,6 +124,7 @@ class Core:
         )
 
         self.load()
+        self._train_model.eval()
 
         data_module = PLDataModule(test_dataset=test_dataset, batch_size=batch_size,
                                    collate_fn=collate_fn if collate_fn is not None else self._default_collate)

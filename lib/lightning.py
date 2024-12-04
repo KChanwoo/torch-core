@@ -51,7 +51,7 @@ class PLModel(L.LightningModule):
         self.core.get_scorer().reset_epoch()
 
     def on_train_end(self):
-        self.core.get_scorer().draw_total_result()
+        self.core.get_scorer().draw_total_result(True, True, True, title='Train')
 
     def on_validation_epoch_end(self):
         loss, auc, score = self.core.get_scorer().get_epoch_result(True, True, False)

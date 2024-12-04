@@ -210,18 +210,8 @@ class MulticlassScorer(Scorer):
             self._score_list.append(epoch_f1)
 
         if write:
-            write_path = os.path.join(self._base_path, '{0}.txt'.format(title))
-            with open(write_path, 'w', encoding='utf8') as f:
-                lines = [
-                    "The number of {0} data: {1}\n".format(title, len(self._preds_list)),
-                    "Accuracy: {0}\n".format(epoch_acc),
-                    "Loss: {0}\n".format(epoch_loss),
-                    "F1 Score: {0}\n".format(epoch_f1)
-                ]
-
-                f.writelines(lines)
-
             cm = confusion_matrix(labels_total, self._preds_list)
+
             # visualise it
             plt.figure(figsize=(8, 8))
             plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Greens)
@@ -233,13 +223,25 @@ class MulticlassScorer(Scorer):
             plt.yticks(tick_marks, [str(label) for label in list(range(n_class))])
 
             thresh = cm.max() / 2
-            for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-                plt.text(i, j, cm[i, j], horizontalalignment='center', color='white' if cm[i, j] > thresh else 'red')
+            for i, j in itertools.product(range(cm.shape[1]), range(cm.shape[0])):
+                plt.text(i, j, cm[j, i], horizontalalignment='center', color='white' if cm[j, i] > thresh else 'red')
 
             plt.tight_layout()
             plt.xlabel('Predictions')
             plt.ylabel('Real Values')
             self.show(plt, os.path.join(self._base_path, "{0}_cm".format(title) + str(self._save_num) + ".png"))
+
+            write_path = os.path.join(self._base_path, '{0}.txt'.format(title))
+            with open(write_path, 'w', encoding='utf8') as f:
+                lines = [
+                    "The number of {0} data: {1}\n".format(title, len(self._preds_list)),
+                    "Accuracy: {0}\n".format(epoch_acc),
+                    "Loss: {0}\n".format(epoch_loss),
+                    "F1 Score: {0}\n".format(epoch_f1),
+                    "Confusion Matrix: {0}".format(cm)
+                ]
+
+                f.writelines(lines)
 
         print('Loss: {:.4f} Acc: {:.4f} F1: {:.4f}'.format(epoch_loss, epoch_acc, epoch_f1))
 
