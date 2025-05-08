@@ -9,8 +9,8 @@ import torch.nn
 import torchvision.datasets as dsets
 import torchvision.transforms as transforms
 
-from lib.core import Core
-from lib.score import MulticlassScorer
+from torchc.core import Core
+from torchc.score import MulticlassScorer
 
 mnist_train = dsets.MNIST(root='MNIST_data/',
                           train=True,

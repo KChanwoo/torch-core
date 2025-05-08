@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from lib.core import Core, GanCore
+    from torchc.core import Core, GanCore
 
 
 class PLModel(L.LightningModule):
@@ -17,23 +17,20 @@ class PLModel(L.LightningModule):
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
-        inputs, labels = batch
-        outputs, loss = self.core.train_step(self.model, inputs, labels)
+        outputs, loss = self.core.train_step(self.model, *batch)
         self.log('train_loss', loss)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        inputs, labels = batch
-        outputs, loss = self.core.train_step(self.model, inputs, labels)
-        self.core.get_scorer().add_batch_result(outputs, labels, loss)
+        outputs, loss = self.core.train_step(self.model, *batch)
+        self.core.get_scorer().add_batch_result(outputs, batch[-1], loss)
         self.log('val_loss', loss, prog_bar=True, sync_dist=True)
 
         return loss
 
     def test_step(self, batch, batch_idx):
-        inputs, labels = batch
-        outputs, loss = self.core.train_step(self.model, inputs, labels)
-        self.core.get_scorer().add_batch_result(outputs, labels, loss)
+        outputs, loss = self.core.train_step(self.model, *batch)
+        self.core.get_scorer().add_batch_result(outputs, batch[-1], loss)
         self.log('test_loss', loss, prog_bar=True, sync_dist=True)
 
         return loss
@@ -51,7 +48,7 @@ class PLModel(L.LightningModule):
         self.core.get_scorer().reset_epoch()
 
     def on_train_end(self):
-        self.core.get_scorer().draw_total_result(True, True, True, title='Train')
+        self.core.get_scorer().draw_total_result(title='Train')
 
     def on_validation_epoch_end(self):
         loss, auc, score = self.core.get_scorer().get_epoch_result(True, True, False)

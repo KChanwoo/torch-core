@@ -11,8 +11,8 @@ from torch import Tensor
 from torch.optim import Optimizer
 from torch.utils.data import Dataset
 
-from lib.lightning import PLDataModule, PLModel
-from lib.score import Scorer, GanScorer
+from torchc.lightning import PLDataModule, PLModel
+from torchc.score import Scorer, GanScorer
 
 
 class Core:
@@ -46,14 +46,14 @@ class Core:
         if self.__verbose:
             print(*args)
 
-    def train_step(self, model, inputs, labels):
-
+    def train_step(self, model, *tensors):
+        inputs, labels = tensors[:-1], tensors[-1]
         if self._scaler is None:
-            outputs = model(inputs)
+            outputs = model(*inputs)
             loss = self._loss(outputs, labels)  # calculate loss
         else:
             with torch.cuda.amp.autocast():
-                outputs = model(inputs)
+                outputs = model(*inputs)
                 loss = self._loss(outputs, labels)  # calculate loss
 
         return outputs, loss

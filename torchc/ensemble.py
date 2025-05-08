@@ -6,8 +6,8 @@ import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 from tqdm import tqdm
 
-from lib.core import Core
-from lib.score import Scorer
+from torchc.core import Core
+from torchc.score import Scorer
 
 
 class VoteEnsemble(Core):

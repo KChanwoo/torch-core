@@ -12,7 +12,7 @@ from torch.utils.data.dataset import T_co
 from torchvision import transforms
 from tqdm import tqdm
 
-from lib.core import Core, GanCore
+from torchc.core import Core, GanCore
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 import matplotlib

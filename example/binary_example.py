@@ -7,10 +7,9 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 import pandas as pd
 import torch.nn
 from torch.utils.data import Dataset
-from torch.utils.data.dataset import T_co
 
-from lib.core import Core
-from lib.score import BinaryScorer
+from torchc.core import Core
+from torchc.score import BinaryScorer
 
 
 """
@@ -28,7 +27,7 @@ class ECGDataset(Dataset):
         self.dataset.extend([{'data': [float(ecg) for ecg in item], 'label': 0} for item in normals])
         self.dataset.extend([{'data': [float(ecg) for ecg in item], 'label': 1} for item in abnormals])
 
-    def __getitem__(self, index) -> T_co:
+    def __getitem__(self, index):
         return [self.dataset[index]['data']], [float(self.dataset[index]['label'])]
 
     def __len__(self):
@@ -48,11 +47,11 @@ model = torch.nn.Sequential(
     torch.nn.Flatten(1),
     LinearModule(1, 1, activation=torch.nn.Softmax())
 )
-
+print(torch.backends.mps.is_available())
 opt = torch.optim.SGD(params=model.parameters(), lr=1.0e-4)
 loss = torch.nn.BCELoss()
 scorer = BinaryScorer("./result")
-core = Core("./result", model, opt, loss, scorer)
+core = Core("./result", model, opt, loss, None, scorer)
 
 normal_train_len = round(len(normal.values) * .9)
 abnormal_train_len = round(len(abnormal.values) * .9)

@@ -1,6 +1,6 @@
 import os
 
-from lib.ensemble import VoteEnsemble
+from torchc.ensemble import VoteEnsemble
 from module.common import LinearModule
 from module.vision import ConvModule
 
@@ -8,8 +8,8 @@ import torch.nn
 import torchvision.datasets as dsets
 import torchvision.transforms as transforms
 
-from lib.core import Core
-from lib.score import MulticlassScorer, BinaryScorer
+from torchc.core import Core
+from torchc.score import MulticlassScorer, BinaryScorer
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 

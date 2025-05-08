@@ -6,7 +6,16 @@ import os
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
-from sklearn.metrics import roc_curve, f1_score, mean_squared_error, confusion_matrix
+from sklearn.metrics import (
+    roc_curve,
+    auc,
+    precision_recall_curve,
+    average_precision_score,
+    f1_score,
+    mean_squared_error,
+    r2_score,
+    confusion_matrix,
+)
 from torch.nn.functional import one_hot
 
 
@@ -141,13 +150,35 @@ class BinaryScorer(Scorer):
             self._score_list.append(epoch_f1)
 
         if write:
+            cm = confusion_matrix(self._labels_list, self._preds_list)
+
+            # visualise it
+            plt.figure(figsize=(8, 8))
+            plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Greens)
+            plt.title("Confusion Matrix")
+            plt.colorbar()
+
+            tick_marks = np.arange(2)
+            plt.xticks(tick_marks, [str(label) for label in list(range(2))], rotation=45)
+            plt.yticks(tick_marks, [str(label) for label in list(range(2))])
+
+            thresh = cm.max() / 2
+            for i, j in itertools.product(range(cm.shape[1]), range(cm.shape[0])):
+                plt.text(i, j, cm[j, i], horizontalalignment='center', color='white' if cm[j, i] > thresh else 'red')
+
+            plt.tight_layout()
+            plt.xlabel('Predictions')
+            plt.ylabel('Real Values')
+            self.show(plt, os.path.join(self._base_path, "{0}_cm".format(title) + str(self._save_num) + ".png"))
+
             write_path = os.path.join(self._base_path, '{0}.txt'.format(title))
             with open(write_path, 'w', encoding='utf8') as f:
                 lines = [
                     "The number of {0} data: {1}\n".format(title, len(self._preds_list)),
                     "Accuracy: {0}\n".format(epoch_acc),
                     "Loss: {0}\n".format(epoch_loss),
-                    "F1 Score: {0}\n".format(epoch_f1)
+                    "F1 Score: {0}\n".format(epoch_f1),
+                    "Confusion Matrix: {0}".format(cm)
                 ]
 
                 f.writelines(lines)
@@ -155,6 +186,32 @@ class BinaryScorer(Scorer):
         print('Loss: {:.4f} Acc: {:.4f} F1: {:.4f}'.format(epoch_loss, epoch_acc, epoch_f1))
 
         return epoch_loss, epoch_acc, epoch_f1
+
+    def draw_total_result(self, title='Train'):
+        """
+        Draws classification‑specific visualisations:
+         • Confusion‑matrix (2×2 heat‑map)
+         • ROC curve with AUC
+         • Precision‑Recall curve with Average Precision (AP)
+        Images are saved into `self._base_path` and also shown if `self._show` is True.
+        """
+
+        # --- prepare data ----------------------------------------------------
+        labels = [int(l[0]) if isinstance(l, (list, tuple)) else int(l) for l in self._labels_list]
+        scores = self._output_list  # raw logits or probabilities
+
+        # --- Precision‑Recall curve --------------------------------------
+        precision, recall, _ = precision_recall_curve(labels, scores)
+        ap = average_precision_score(labels, scores)
+        plt.figure()
+        plt.plot(recall, precision, label=f"AP = {ap:.3f}")
+        plt.xlabel("Recall")
+        plt.ylabel("Precision")
+        plt.title(f"{title} – Precision‑Recall")
+        plt.legend(loc="lower left")
+        self.show(plt, os.path.join(self._base_path, f"{title}_pr.png"))
+
+        return super().draw_total_result(title)
 
 
 class MulticlassScorer(Scorer):
@@ -247,6 +304,59 @@ class MulticlassScorer(Scorer):
 
         return epoch_loss, epoch_acc, epoch_f1
 
+    def draw_total_result(self, title: str = "Train"):
+        """
+        Draws multi‑class visualisations:
+
+         • ROC curves per class + micro‑average
+         • Precision‑Recall curves per class + micro‑average
+         • Confusion‑matrix + training curves (delegated to super)
+        """
+
+        # --- prepare -----------------------------------------------------------------
+        # labels: index form or one‑hot
+        if len(self._labels_list) == 0:
+            return super().draw_total_result(title)
+
+        n_class = len(self._output_list[0])
+        y_score = np.array(self._output_list)  # shape (N, C)
+
+        # convert labels to one‑hot array (N, C)
+        if isinstance(self._labels_list[0], int):
+            y_true = one_hot(torch.tensor(self._labels_list), num_classes=n_class).numpy()
+        else:
+            y_true = np.array(self._labels_list)
+
+        # --- Precision‑Recall curves -------------------------------------------------
+        precision = dict()
+        recall = dict()
+        avg_prec = dict()
+        for i in range(n_class):
+            precision[i], recall[i], _ = precision_recall_curve(y_true[:, i], y_score[:, i])
+            avg_prec[i] = average_precision_score(y_true[:, i], y_score[:, i])
+
+        precision["micro"], recall["micro"], _ = precision_recall_curve(
+            y_true.ravel(), y_score.ravel())
+        avg_prec["micro"] = average_precision_score(y_true, y_score, average="micro")
+
+        plt.figure()
+        plt.plot(recall["micro"], precision["micro"],
+                 label=f"micro‑avg AP = {avg_prec['micro']:.3f}",
+                 color="navy", linestyle=":", linewidth=2)
+
+        for i in range(n_class):
+            plt.plot(recall[i], precision[i], linewidth=1.2,
+                     label=f"class {i} (AP = {avg_prec[i]:.3f})")
+
+        plt.xlabel("Recall")
+        plt.ylabel("Precision")
+        plt.title(f"{title} – Precision‑Recall Curves")
+        plt.legend(fontsize="small", loc="lower left")
+        self.show(plt, os.path.join(self._base_path, f"{title}_pr.png"))
+
+        # delegate to base for confusion‑matrix & learning curves
+        return super().draw_total_result(title)
+
 
 class MSEScorer(Scorer):
     def add_batch_result(self, outputs, labels, batch_loss):
@@ -289,6 +399,57 @@ class MSEScorer(Scorer):
         print('Loss: {:.4f} MSE: {:.4f}'.format(epoch_loss, epoch_mse))
 
         return epoch_loss, epoch_mse, math.sqrt(epoch_mse)
+
+    def draw_total_result(self, title: str = "Train"):
+        """
+        Visualises regression performance:
+
+         • Scatter plot (True vs. Predicted) with y = x reference
+         • Residuals histogram
+         • Absolute error over sample index
+
+        Saves figures into `self._base_path` and returns the usual
+        loss / accuracy / score lists from the base class.
+        """
+        if len(self._labels_list) == 0:
+            return super().draw_total_result(title)
+
+        # --- prepare data ----------------------------------------------------
+        y_true = np.array([l[0] if isinstance(l, (list, tuple)) else l for l in self._labels_list])
+        y_pred = np.array(self._preds_list)
+        residuals = y_pred - y_true
+
+        mse = mean_squared_error(y_true, y_pred)
+        r2 = r2_score(y_true, y_pred)
+
+        # 1) Scatter – True vs Predicted
+        plt.figure()
+        plt.scatter(y_true, y_pred, s=10, alpha=0.5)
+        min_v, max_v = y_true.min(), y_true.max()
+        plt.plot([min_v, max_v], [min_v, max_v], "r--", linewidth=1)
+        plt.xlabel("True")
+        plt.ylabel("Predicted")
+        plt.title(f"{title} – True vs Predicted\nMSE={mse:.3f}  R²={r2:.3f}")
+        self.show(plt, os.path.join(self._base_path, f"{title}_scatter.png"))
+
+        # 2) Residuals histogram
+        plt.figure()
+        plt.hist(residuals, bins=30, edgecolor="black")
+        plt.xlabel("Residual (Pred − True)")
+        plt.ylabel("Frequency")
+        plt.title(f"{title} – Residual Distribution")
+        self.show(plt, os.path.join(self._base_path, f"{title}_residual_hist.png"))
+
+        # 3) Absolute error per sample
+        plt.figure()
+        plt.plot(np.abs(residuals))
+        plt.xlabel("Sample Index")
+        plt.ylabel("|Residual|")
+        plt.title(f"{title} – Absolute Error per Sample")
+        self.show(plt, os.path.join(self._base_path, f"{title}_abs_error.png"))
+
+        # Delegate to base class for combined loss / acc / score curves
+        return super().draw_total_result(title)
 
 
 class GanScorer(Scorer):
