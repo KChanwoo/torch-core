@@ -1,5 +1,7 @@
 import os
 
+import numpy as np
+
 from module.common import LinearModule
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
@@ -28,7 +30,9 @@ class ECGDataset(Dataset):
         self.dataset.extend([{'data': [float(ecg) for ecg in item], 'label': 1} for item in abnormals])
 
     def __getitem__(self, index):
-        return [self.dataset[index]['data']], [float(self.dataset[index]['label'])]
+
+        # return [self.dataset[index]['data']], [float(self.dataset[index]['label'])]
+        return np.array([self.dataset[index]['data']]).astype(np.float32), np.array([self.dataset[index]['label']]).astype(np.float32)
 
     def __len__(self):
         return len(self.dataset)

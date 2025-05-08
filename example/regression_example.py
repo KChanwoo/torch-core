@@ -47,7 +47,7 @@ class MusicDataset(Dataset):
         self.dataset = dataset
 
     def __getitem__(self, index):
-        return np.append(self.dataset[index, :2], self.dataset[index, 3:6]).astype(np.float32), [float(self.dataset[index, -1])]
+        return np.append(self.dataset[index, :2], self.dataset[index, 3:6]).astype(np.float32), np.array([self.dataset[index, -1]]).astype(np.float32)
 
     def __len__(self):
         return len(self.dataset)

@@ -1,7 +1,7 @@
 import lightning as L
+from lightning.pytorch.callbacks import EarlyStopping
 from torch.utils.data import Dataset, DataLoader
 from typing import TYPE_CHECKING
-
 
 if TYPE_CHECKING:
     from torchc.core import Core, GanCore
@@ -75,7 +75,8 @@ class GanPLModel(PLModel):
 
 
 class PLDataModule(L.LightningDataModule):
-    def __init__(self, batch_size=64, train_dataset: Dataset = None, valid_dataset: Dataset = None, test_dataset: Dataset = None, collate_fn=None):
+    def __init__(self, batch_size=64, train_dataset: Dataset = None, valid_dataset: Dataset = None,
+                 test_dataset: Dataset = None, collate_fn=None):
         super().__init__()
         self.batch_size = batch_size
         self.train_dataset = train_dataset
@@ -85,10 +86,25 @@ class PLDataModule(L.LightningDataModule):
         self.collate_fn = collate_fn
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, collate_fn=self.collate_fn) if self.train_dataset is not None else None
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True,
+                          collate_fn=self.collate_fn) if self.train_dataset is not None else None
 
     def val_dataloader(self):
-        return DataLoader(self.valid_dataset, batch_size=self.batch_size, shuffle=True, collate_fn=self.collate_fn) if self.valid_dataset is not None else None
+        return DataLoader(self.valid_dataset, batch_size=self.batch_size, shuffle=True,
+                          collate_fn=self.collate_fn) if self.valid_dataset is not None else None
 
     def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=True, collate_fn=self.collate_fn) if self.test_dataset is not None else None
+        return DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=True,
+                          collate_fn=self.collate_fn) if self.test_dataset is not None else None
+
+
+class DelayedEarlyStopping(EarlyStopping):
+    def __init__(self, start_epoch: int = 10, **kwargs):
+        super().__init__(**kwargs)
+        self.start_epoch = start_epoch
+
+    def on_validation_end(self, trainer, pl_module):
+        # 워밍업 기간엔 패스
+        if trainer.current_epoch < self.start_epoch:
+            return
+        return super().on_validation_end(trainer, pl_module)

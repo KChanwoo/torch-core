@@ -11,14 +11,14 @@ from torch import Tensor
 from torch.optim import Optimizer
 from torch.utils.data import Dataset
 
-from torchc.lightning import PLDataModule, PLModel
+from torchc.lightning import PLDataModule, PLModel, DelayedEarlyStopping
 from torchc.score import Scorer, GanScorer
 
 
 class Core:
     def __init__(self, base_path: str, model: Union[None, torch.nn.Module], optimizer: Union[None, Optimizer],
                  loss: Union[None, torch.nn.Module], scheduler=Union[None, torch.optim.lr_scheduler.LRScheduler],
-                 scorer: Scorer = None, early_stopping: bool = True, verbose: bool = True, show_fig=False, use_amp=False):
+                 scorer: Scorer = None, early_stopping: bool = True, verbose: bool = True, show_fig=False, use_amp=False, patience=5, early_stopping_skip=0):
         self._model = model
         self._base_path = base_path
         self._optimizer = optimizer
@@ -30,6 +30,8 @@ class Core:
         self._device = torch.device(
             "cuda:0" if torch.backends.cuda.is_built() else "mps" if torch.backends.mps.is_built() else "cpu")
 
+        self._patience = patience
+        self._early_stopping_skip = early_stopping_skip
         self.__verbose = verbose
         if not os.path.exists(base_path):
             try:
@@ -58,22 +60,6 @@ class Core:
 
         return outputs, loss
 
-    def _default_collate(self, batch):
-        item = batch[0]
-        img = item[0]
-        lbl = item[1]
-        if isinstance(img, Tensor):
-            image = torch.stack([item[0] for item in batch])
-        else:
-            image = torch.tensor([item[0] for item in batch])
-
-        if isinstance(lbl, Tensor):
-            label = torch.stack([item[1] for item in batch])
-        else:
-            label = torch.tensor([item[1] for item in batch])
-
-        return image, label
-
     def after_epoch_one(self, phase):
         return self._scorer.get_epoch_result(phase == 'val', phase == 'val')
 
@@ -91,12 +77,13 @@ class Core:
 
         if self.__early_stopping:
             callbacks.append(
-                EarlyStopping(
+                DelayedEarlyStopping(
                     monitor='avg_val_loss',
-                    patience=5,
+                    patience=self._patience,
                     verbose=True,
                     mode='min',
-                    log_rank_zero_only=True
+                    log_rank_zero_only=True,
+                    start_epoch=self._early_stopping_skip
                 )
             )
 
@@ -112,7 +99,7 @@ class Core:
         )
 
         data_module = PLDataModule(train_dataset=dataset, valid_dataset=dataset_val, batch_size=batch_size,
-                                   collate_fn=collate_fn if collate_fn is not None else self._default_collate)
+                                   collate_fn=collate_fn if collate_fn is not None else None)
 
         trainer.fit(self._train_model, data_module)
 
@@ -127,7 +114,7 @@ class Core:
         self._train_model.eval()
 
         data_module = PLDataModule(test_dataset=test_dataset, batch_size=batch_size,
-                                   collate_fn=collate_fn if collate_fn is not None else self._default_collate)
+                                   collate_fn=collate_fn if collate_fn is not None else None)
 
         trainer.test(self._train_model, data_module)
 
