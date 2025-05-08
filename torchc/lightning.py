@@ -107,4 +107,12 @@ class DelayedEarlyStopping(EarlyStopping):
         # 워밍업 기간엔 패스
         if trainer.current_epoch < self.start_epoch:
             return
-        return super().on_validation_end(trainer, pl_module)
+
+        super().on_validation_end(trainer, pl_module)
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        if trainer.current_epoch < self.start_epoch:
+            return
+
+        super().on_train_epoch_end(trainer, pl_module)
+

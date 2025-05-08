@@ -57,6 +57,6 @@ train_len = int(len(data_array) * 0.9)
 train_dataset = MusicDataset(data_array[:train_len])
 test_dataset = MusicDataset(data_array[train_len:])
 
-core = Core("./result/regression", model, optimizer, loss, None, scorer)
+core = Core("./result/regression", model, optimizer, loss, None, scorer, early_stopping=True, early_stopping_skip=10)
 core.train(train_dataset, test_dataset, num_epochs=10)
 core.test(test_dataset)
