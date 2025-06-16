@@ -64,7 +64,7 @@ class Core:
         return self._scorer.get_epoch_result(phase == 'val', phase == 'val')
 
     def train(self, dataset: Dataset, dataset_val: Union[Dataset, None], world_size: int = 1, batch_size=64,
-              num_epochs=1000, collate_fn=None):
+              num_epochs=1000, collate_fn=None, num_workers=1):
         callbacks = [
             ModelCheckpoint(
                 monitor='avg_val_loss',
@@ -98,7 +98,7 @@ class Core:
             check_val_every_n_epoch=1 if dataset_val is not None else 0  # validation 주기 설정
         )
 
-        data_module = PLDataModule(train_dataset=dataset, valid_dataset=dataset_val, batch_size=batch_size,
+        data_module = PLDataModule(train_dataset=dataset, valid_dataset=dataset_val, batch_size=batch_size, num_workers=num_workers,
                                    collate_fn=collate_fn if collate_fn is not None else None)
 
         trainer.fit(self._train_model, data_module)
