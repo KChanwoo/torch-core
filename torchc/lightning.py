@@ -76,25 +76,26 @@ class GanPLModel(PLModel):
 
 class PLDataModule(L.LightningDataModule):
     def __init__(self, batch_size=64, train_dataset: Dataset = None, valid_dataset: Dataset = None,
-                 test_dataset: Dataset = None, collate_fn=None):
+                 test_dataset: Dataset = None, collate_fn=None, num_workers=1):
         super().__init__()
         self.batch_size = batch_size
         self.train_dataset = train_dataset
         self.valid_dataset = valid_dataset
         self.test_dataset = test_dataset
+        self.num_workers = num_workers
 
         self.collate_fn = collate_fn
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True,
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers,
                           collate_fn=self.collate_fn) if self.train_dataset is not None else None
 
     def val_dataloader(self):
-        return DataLoader(self.valid_dataset, batch_size=self.batch_size, shuffle=True,
+        return DataLoader(self.valid_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers,
                           collate_fn=self.collate_fn) if self.valid_dataset is not None else None
 
     def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=True,
+        return DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers,
                           collate_fn=self.collate_fn) if self.test_dataset is not None else None
 
 

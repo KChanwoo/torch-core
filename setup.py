@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='torch-core',
-    version='1.0.0',
+    version='1.0.1',
     description='main core of machine learning module by Chanwoo Gwon',
     author='Chanwoo Gwon',
     author_email='arknell@yonsei.ac.kr',
