@@ -309,7 +309,7 @@ class MulticlassScorer(Scorer):
 
             # 그룹 수 결정
             if n_class >= 1000:
-                group_count = 100
+                group_count = 50
             elif n_class >= 100:
                 group_count = 10
             else:
@@ -351,6 +351,19 @@ class MulticlassScorer(Scorer):
             plt.xlabel('Predictions')
             plt.ylabel('Real Values')
             self.show(plt, os.path.join(self._base_path, "{0}_cm".format(title) + str(self._save_num) + ".png"))
+
+            # Sparse confusion scatter plot
+            rows, cols = np.where((cm > 0) & (np.arange(n_class)[:, None] != np.arange(n_class)))
+            vals = cm[rows, cols]
+
+            plt.figure(figsize=(10, 8))
+            plt.scatter(rows, cols, s=np.clip(vals, 10, 300), c=vals, cmap='cool', alpha=0.6)
+            plt.plot([0, n_class], [0, n_class], 'k--', alpha=0.3)
+            plt.xlabel('True Class')
+            plt.ylabel('Predicted Class')
+            plt.title(f"{title} – Sparse Confusion Scatter Plot")
+            plt.colorbar(label='Count')
+            self.show(plt, os.path.join(self._base_path, f"{title}_sparse_cm{self._save_num}.png"))
 
             write_path = os.path.join(self._base_path, '{0}.txt'.format(title))
             with open(write_path, 'w', encoding='utf8') as f:

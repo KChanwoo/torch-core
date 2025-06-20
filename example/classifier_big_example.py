@@ -36,5 +36,5 @@ scorer = MulticlassScorer("./result/classifier2")
 
 core = Core("./result/classifier2", model, opt, loss, None, scorer)
 
-core.train(train_dataset, test_dataset, num_epochs=5, num_workers=0)
+# core.train(train_dataset, test_dataset, num_epochs=5, num_workers=0)
 core.test(test_dataset, num_workers=0)
