@@ -1,3 +1,4 @@
+import csv
 import itertools
 
 import math
@@ -241,25 +242,62 @@ class MulticlassScorer(Scorer):
             labels_total = torch.argmax(torch.tensor(self._labels_list), dim=1).tolist()
             labels_one_hot = self._labels_list
 
-        for i in range(n_class):
-
-            labels = [label_one[i] for label_one in labels_one_hot]
-            outputs = [output_one[i] for output_one in self._output_list]
-
-            fpr, tpr, _ = roc_curve(labels, outputs)
-
-            if draw:
-                plt.plot(fpr, tpr, label=str(i))
-
-        if draw:
-            plt.legend()
-            self.show(plt, os.path.join(self._base_path, "{0}_roc".format(title) + str(self._save_num) + ".png"))
-            self._save_num += 1
-
         epoch_corrects = torch.sum(torch.tensor(self._preds_list).cpu() == torch.tensor(self._labels_list).cpu())
         epoch_f1 = f1_score(labels_total, self._preds_list, average='weighted')
         epoch_loss = self._epoch_loss / len(self._preds_list)
         epoch_acc = epoch_corrects.double() / len(self._preds_list)
+
+        if draw:
+            y_score = np.array(self._output_list)
+            if isinstance(self._labels_list[0], int):
+                y_true = one_hot(torch.tensor(self._labels_list), num_classes=n_class).numpy()
+            else:
+                y_true = np.array(self._labels_list)
+
+            fpr = dict()
+            tpr = dict()
+            roc_auc = dict()
+
+            for i in range(n_class):
+                fpr[i], tpr[i], _ = roc_curve(y_true[:, i], y_score[:, i])
+                roc_auc[i] = auc(fpr[i], tpr[i])
+
+            fpr["micro"], tpr["micro"], _ = roc_curve(y_true.ravel(), y_score.ravel())
+            roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
+
+            plt.figure()
+            plt.plot(fpr["micro"], tpr["micro"],
+                     label=f"micro-avg AUC = {roc_auc['micro']:.3f}",
+                     color="navy", linestyle=":", linewidth=2)
+            for i in range(n_class):
+                plt.plot(fpr[i], tpr[i], linewidth=1.2)
+            plt.xlabel("False Positive Rate")
+            plt.ylabel("True Positive Rate")
+            plt.title(f"{title} – ROC Curves")
+            self.show(plt, os.path.join(self._base_path, f"{title}_roc{self._save_num}.png"))
+            # Remove detailed per-threshold ROC/PR CSV; instead, write summary CSV
+            summary_csv_path = os.path.join(self._base_path, f"summary_scores{self._save_num}.csv")
+            self._save_num += 1
+
+            with open(summary_csv_path, "w", newline="") as summary_file:
+                writer = csv.writer(summary_file)
+                writer.writerow(["class", "auc", "average_precision", "best_f1", "best_f1_threshold"])
+                for i in range(n_class):
+                    # ROC AUC
+                    fpr_vals, tpr_vals, roc_thresholds = roc_curve(y_true[:, i], y_score[:, i])
+                    roc_auc_val = auc(fpr_vals, tpr_vals)
+
+                    # PR AP
+                    precision_vals, recall_vals, pr_thresholds = precision_recall_curve(y_true[:, i], y_score[:, i])
+                    ap_val = average_precision_score(y_true[:, i], y_score[:, i])
+
+                    # Best F1
+                    f1_scores = 2 * precision_vals * recall_vals / (precision_vals + recall_vals + 1e-8)
+                    best_idx = np.argmax(f1_scores)
+                    best_f1 = f1_scores[best_idx]
+                    best_thresh = pr_thresholds[best_idx] if best_idx < len(pr_thresholds) else 1.0
+
+                    writer.writerow([i, roc_auc_val, ap_val, best_f1, best_thresh])
 
         if is_merged:
             self._accuracy_list.append(epoch_acc.item())
@@ -269,19 +307,45 @@ class MulticlassScorer(Scorer):
         if write:
             cm = confusion_matrix(labels_total, self._preds_list)
 
+            # 그룹 수 결정
+            if n_class >= 1000:
+                group_count = 100
+            elif n_class >= 100:
+                group_count = 10
+            else:
+                group_count = None
+
+            if group_count:
+                group_size = n_class // group_count
+                cm_grouped = np.zeros((group_count, group_count), dtype=int)
+                for i in range(group_count):
+                    for j in range(group_count):
+                        cm_grouped[i, j] = cm[
+                                           i * group_size: min((i + 1) * group_size, n_class),
+                                           j * group_size: min((j + 1) * group_size, n_class)
+                                           ].sum()
+                cm_to_plot = cm_grouped
+                tick_labels = [f"{i * group_size}-{min((i + 1) * group_size - 1, n_class - 1)}" for i in
+                               range(group_count)]
+            else:
+                cm_to_plot = cm
+                tick_labels = [str(label) for label in range(n_class)]
+
             # visualise it
             plt.figure(figsize=(8, 8))
-            plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Greens)
-            plt.title("Confusion Matrix")
+            plt.imshow(cm_to_plot, interpolation='nearest', cmap=plt.cm.Greens)
+            plt.title("Confusion Matrix (Grouped)" if group_count else "Confusion Matrix")
             plt.colorbar()
 
-            tick_marks = np.arange(n_class)
-            plt.xticks(tick_marks, [str(label) for label in list(range(n_class))], rotation=45)
-            plt.yticks(tick_marks, [str(label) for label in list(range(n_class))])
+            tick_marks = np.arange(len(tick_labels))
+            plt.xticks(tick_marks, tick_labels, rotation=45)
+            plt.yticks(tick_marks, tick_labels)
 
-            thresh = cm.max() / 2
-            for i, j in itertools.product(range(cm.shape[1]), range(cm.shape[0])):
-                plt.text(i, j, cm[j, i], horizontalalignment='center', color='white' if cm[j, i] > thresh else 'red')
+            thresh = cm_to_plot.max() / 2
+            for i, j in itertools.product(range(cm_to_plot.shape[1]), range(cm_to_plot.shape[0])):
+                plt.text(i, j, cm_to_plot[j, i],
+                         horizontalalignment='center',
+                         color='white' if cm_to_plot[j, i] > thresh else 'red')
 
             plt.tight_layout()
             plt.xlabel('Predictions')
@@ -295,9 +359,8 @@ class MulticlassScorer(Scorer):
                     "Accuracy: {0}\n".format(epoch_acc),
                     "Loss: {0}\n".format(epoch_loss),
                     "F1 Score: {0}\n".format(epoch_f1),
-                    "Confusion Matrix: {0}".format(cm)
+                    "Confusion Matrix: {0}".format(cm_to_plot.tolist())
                 ]
-
                 f.writelines(lines)
 
         print('Loss: {:.4f} Acc: {:.4f} F1: {:.4f}'.format(epoch_loss, epoch_acc, epoch_f1))
@@ -308,7 +371,6 @@ class MulticlassScorer(Scorer):
         """
         Draws multi‑class visualisations:
 
-         • ROC curves per class + micro‑average
          • Precision‑Recall curves per class + micro‑average
          • Confusion‑matrix + training curves (delegated to super)
         """
@@ -351,10 +413,22 @@ class MulticlassScorer(Scorer):
         plt.xlabel("Recall")
         plt.ylabel("Precision")
         plt.title(f"{title} – Precision‑Recall Curves")
-        plt.legend(fontsize="small", loc="lower left")
+        # plt.legend(fontsize="small", loc="lower left")  # Legend removed as per instruction
         self.show(plt, os.path.join(self._base_path, f"{title}_pr.png"))
 
-        # delegate to base for confusion‑matrix & learning curves
+        pr_csv_path = os.path.join(self._base_path, "pr_scores.csv")
+
+        # Export PR values
+        with open(pr_csv_path, "w", newline="") as pr_file:
+            writer = csv.writer(pr_file)
+            writer.writerow(["class", "threshold", "precision", "recall"])
+            for i in range(n_class):
+                precision_vals, recall_vals, thresholds = precision_recall_curve(y_true[:, i], y_score[:, i])
+                # thresholds has len n-1, precision/recall have len n; append 1.0 to thresholds for last
+                for p, r, t in zip(precision_vals, recall_vals, list(thresholds) + [1.0]):
+                    writer.writerow([i, t, p, r])
+
+        # delegate to base for learning curves
         return super().draw_total_result(title)
 
 
