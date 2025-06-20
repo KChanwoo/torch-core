@@ -103,7 +103,7 @@ class Core:
 
         trainer.fit(self._train_model, data_module)
 
-    def test(self, test_dataset: Dataset, world_size: int = 1, batch_size: int = 64, collate_fn=None):
+    def test(self, test_dataset: Dataset, world_size: int = 1, batch_size: int = 64, collate_fn=None, num_workers=1):
         trainer = Trainer(
             accelerator='gpu' if torch.backends.cuda.is_built() else 'mps' if torch.backends.mps.is_built() else 'cpu',
             devices=world_size,
@@ -113,7 +113,7 @@ class Core:
         self.load()
         self._train_model.eval()
 
-        data_module = PLDataModule(test_dataset=test_dataset, batch_size=batch_size,
+        data_module = PLDataModule(test_dataset=test_dataset, batch_size=batch_size, num_workers=num_workers,
                                    collate_fn=collate_fn if collate_fn is not None else None)
 
         trainer.test(self._train_model, data_module)
