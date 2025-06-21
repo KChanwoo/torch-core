@@ -305,12 +305,9 @@ class MulticlassScorer(Scorer):
             self._score_list.append(epoch_f1)
 
         if write:
-            cm = confusion_matrix(labels_total, self._preds_list)
+            cm = confusion_matrix(labels_total, self._preds_list, labels=list(range(n_class)))
 
-            # 그룹 수 결정
-            if n_class >= 1000:
-                group_count = 50
-            elif n_class >= 100:
+            if n_class >= 100:
                 group_count = 10
             else:
                 group_count = None
