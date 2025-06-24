@@ -30,11 +30,17 @@ model = torch.nn.Sequential(
     LinearModule(128 * 4, 100, activation=torch.nn.Softmax())  # CIFAR-100: 100 classes
 )
 
-opt = torch.optim.Adam(model.parameters(), lr=1.0e-4)
+opt = torch.optim.Adam(model.parameters(), lr=1.0e-2)
 loss = torch.nn.CrossEntropyLoss()
 scorer = MulticlassScorer("./result/classifier2")
+scheduler = torch.optim.lr_scheduler.OneCycleLR(
+    opt,
+    max_lr=1e-3,
+    steps_per_epoch=1,
+    epochs=5
+)
 
-core = Core("./result/classifier2", model, opt, loss, None, scorer)
+core = Core("./result/classifier2", model, opt, loss, scheduler, scorer)
 
-# core.train(train_dataset, test_dataset, num_epochs=5, num_workers=0)
-core.test(test_dataset, num_workers=0)
+core.train(train_dataset, test_dataset, num_epochs=5, num_workers=0)
+# core.test(test_dataset, num_workers=0)

@@ -76,13 +76,18 @@ class GanPLModel(PLModel):
 
 class PLDataModule(L.LightningDataModule):
     def __init__(self, batch_size=64, train_dataset: Dataset = None, valid_dataset: Dataset = None,
-                 test_dataset: Dataset = None, collate_fn=None, num_workers=1):
+                 test_dataset: Dataset = None, collate_fn=None, num_workers=1, scheduler=None, optimizer=None):
         super().__init__()
         self.batch_size = batch_size
         self.train_dataset = train_dataset
         self.valid_dataset = valid_dataset
         self.test_dataset = test_dataset
         self.num_workers = num_workers
+        self.scheduler = scheduler
+        self.optimizer = optimizer
+
+        if self.optimizer is not None:
+            self.automatic_optimization = False
 
         self.collate_fn = collate_fn
 
@@ -97,6 +102,18 @@ class PLDataModule(L.LightningDataModule):
     def test_dataloader(self):
         return DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers,
                           collate_fn=self.collate_fn) if self.test_dataset is not None else None
+
+    def configure_optimizers(self):
+        return {
+            'optimizer': self.optimizer,
+            'lr_scheduler': {
+                'scheduler': self.scheduler,
+                'interval': 'epoch',  # or 'step'
+                'frequency': 1,
+                'monitor': 'train_loss',  # optional
+                'name': 'cosine_annealing_lr'
+            }
+        }
 
 
 class DelayedEarlyStopping(EarlyStopping):

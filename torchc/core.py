@@ -99,7 +99,7 @@ class Core:
         )
 
         data_module = PLDataModule(train_dataset=dataset, valid_dataset=dataset_val, batch_size=batch_size, num_workers=num_workers,
-                                   collate_fn=collate_fn if collate_fn is not None else None)
+                                   collate_fn=collate_fn if collate_fn is not None else None, scheduler=self._scheduler, optimizer=self._optimizer)
 
         trainer.fit(self._train_model, data_module)
 
