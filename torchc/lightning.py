@@ -104,16 +104,7 @@ class PLDataModule(L.LightningDataModule):
                           collate_fn=self.collate_fn) if self.test_dataset is not None else None
 
     def configure_optimizers(self):
-        return {
-            'optimizer': self.optimizer,
-            'lr_scheduler': {
-                'scheduler': self.scheduler,
-                'interval': 'epoch',  # or 'step'
-                'frequency': 1,
-                'monitor': 'train_loss',  # optional
-                'name': 'cosine_annealing_lr'
-            }
-        }
+        return [self.optimizer], [{"scheduler": self.scheduler, "interval": "epoch"}]
 
 
 class DelayedEarlyStopping(EarlyStopping):
