@@ -19,6 +19,8 @@ class Core:
     def __init__(self, base_path: str, model: Union[None, torch.nn.Module], optimizer: Union[None, Optimizer],
                  loss: Union[None, torch.nn.Module], scheduler=Union[None, torch.optim.lr_scheduler.LRScheduler],
                  scorer: Scorer = None, early_stopping: bool = True, verbose: bool = True, show_fig=False, use_amp=False, patience=5, early_stopping_skip=0):
+        self._device = 'gpu' if torch.backends.cuda.is_built() else 'mps' if torch.backends.mps.is_built() else 'cpu'
+
         self._model = model
         self._base_path = base_path
         self._optimizer = optimizer
@@ -27,8 +29,6 @@ class Core:
         self._loss = loss
         self._scorer = scorer if scorer is not None else Scorer(self._base_path, show_fig)
         self._scaler = torch.cuda.amp.GradScaler() if torch.backends.cuda.is_built() and use_amp else None
-        self._device = torch.device(
-            "cuda:0" if torch.backends.cuda.is_built() else "mps" if torch.backends.mps.is_built() else "cpu")
 
         self._patience = patience
         self._early_stopping_skip = early_stopping_skip
@@ -91,7 +91,7 @@ class Core:
 
         trainer = Trainer(
             max_epochs=num_epochs,
-            accelerator='gpu' if torch.backends.cuda.is_built() else 'mps' if torch.backends.mps.is_built() else 'cpu',
+            accelerator=self._device,
             devices=world_size,
             callbacks=callbacks,
             logger=logger,
@@ -99,13 +99,13 @@ class Core:
         )
 
         data_module = PLDataModule(train_dataset=dataset, valid_dataset=dataset_val, batch_size=batch_size, num_workers=num_workers,
-                                   collate_fn=collate_fn if collate_fn is not None else None, scheduler=self._scheduler, optimizer=self._optimizer)
+                                   collate_fn=collate_fn if collate_fn is not None else None)
 
         trainer.fit(self._train_model, data_module)
 
     def test(self, test_dataset: Dataset, world_size: int = 1, batch_size: int = 64, collate_fn=None, num_workers=1):
         trainer = Trainer(
-            accelerator='gpu' if torch.backends.cuda.is_built() else 'mps' if torch.backends.mps.is_built() else 'cpu',
+            accelerator=self._device,
             devices=world_size,
             logger=False
         )
