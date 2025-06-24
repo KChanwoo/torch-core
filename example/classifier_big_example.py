@@ -1,5 +1,7 @@
 import os
 
+import timm
+
 from module.common import LinearModule
 from module.vision import ConvModule
 
@@ -16,18 +18,17 @@ from torchc.score import MulticlassScorer
 imagenet_root = '/Volumes/Application/data'  # 실제 경로로 변경
 
 transform = transforms.Compose([
+    transforms.Resize(256),
     transforms.ToTensor()
 ])
 
 train_dataset = CIFAR100(root='./data', train=True, download=True, transform=transform)
 test_dataset = CIFAR100(root='./data', train=False, download=True, transform=transform)
 
-model = torch.nn.Sequential(
-    ConvModule(3, 32, 3, pool=torch.nn.MaxPool2d(2), activation=torch.nn.ReLU()),  # 32x32 -> 16x16
-    ConvModule(32, 64, 3, pool=torch.nn.MaxPool2d(2), activation=torch.nn.ReLU()),  # 16x16 -> 8x8
-    ConvModule(64, 128, 3, pool=torch.nn.MaxPool2d(2), activation=torch.nn.ReLU()),  # 8x8 -> 4x4
-    torch.nn.Flatten(),
-    LinearModule(128 * 4, 100, activation=torch.nn.Softmax())  # CIFAR-100: 100 classes
+model = timm.create_model(
+    'swinv2_base_window12to16_192to256.ms_in22k_ft_in1k',
+    pretrained=True,
+    num_classes=100
 )
 
 opt = torch.optim.Adam(model.parameters(), lr=1.0e-2)
@@ -42,5 +43,5 @@ scheduler = torch.optim.lr_scheduler.OneCycleLR(
 
 core = Core("./result/classifier2", model, opt, loss, scheduler, scorer)
 
-core.train(train_dataset, test_dataset, num_epochs=5, num_workers=0)
+core.train(train_dataset, test_dataset, num_epochs=5, num_workers=4, batch_size=16)
 # core.test(test_dataset, num_workers=0)
