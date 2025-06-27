@@ -132,7 +132,7 @@ class Core:
         return self._model(x)
 
     def load(self, train=False):
-        self._train_model = PLModel.load_from_checkpoint(os.path.join(self._base_path, "weight_train.ckpt"), core=self)
+        self._train_model = PLModel.load_from_checkpoint(os.path.join(self._base_path, "weight_train.ckpt"), core=self, map_location=self._device)
         self._model = self._train_model.model
         if not train:
             self._model.eval()
