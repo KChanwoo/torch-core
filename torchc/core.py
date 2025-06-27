@@ -19,7 +19,8 @@ class Core:
     def __init__(self, base_path: str, model: Union[None, torch.nn.Module], optimizer: Union[None, Optimizer],
                  loss: Union[None, torch.nn.Module], scheduler=Union[None, torch.optim.lr_scheduler.LRScheduler],
                  scorer: Scorer = None, early_stopping: bool = True, verbose: bool = True, show_fig=False, use_amp=False, patience=5, early_stopping_skip=0):
-        self._device = 'gpu' if torch.backends.cuda.is_built() else 'mps' if torch.backends.mps.is_built() else 'cpu'
+        self._device = 'cuda' if torch.backends.cuda.is_built() else 'mps' if torch.backends.mps.is_built() else 'cpu'
+        self._accelerator = 'gpu' if torch.backends.cuda.is_built() else 'mps' if torch.backends.mps.is_built() else 'cpu'
 
         self._model = model
         self._base_path = base_path
@@ -91,7 +92,7 @@ class Core:
 
         trainer = Trainer(
             max_epochs=num_epochs,
-            accelerator=self._device,
+            accelerator=self._accelerator,
             devices=world_size,
             callbacks=callbacks,
             logger=logger,
@@ -105,7 +106,7 @@ class Core:
 
     def test(self, test_dataset: Dataset, world_size: int = 1, batch_size: int = 64, collate_fn=None, num_workers=1):
         trainer = Trainer(
-            accelerator=self._device,
+            accelerator=self._accelerator,
             devices=world_size,
             logger=False
         )
@@ -127,12 +128,14 @@ class Core:
         return output_list, pred
 
     def predict(self, x):
-        self.load()
+        x = x.to(self._device)
         return self._model(x)
 
-    def load(self):
+    def load(self, train=False):
         self._train_model = PLModel.load_from_checkpoint(os.path.join(self._base_path, "weight_train.ckpt"), core=self)
         self._model = self._train_model.model
+        if not train:
+            self._model.eval()
 
     def save(self, pt_path):
         torch.save(self._model.state_dict(), pt_path)

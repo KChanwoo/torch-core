@@ -91,11 +91,11 @@ class PLDataModule(L.LightningDataModule):
                           collate_fn=self.collate_fn) if self.train_dataset is not None else None
 
     def val_dataloader(self):
-        return DataLoader(self.valid_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers,
+        return DataLoader(self.valid_dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers,
                           collate_fn=self.collate_fn) if self.valid_dataset is not None else None
 
     def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers,
+        return DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers,
                           collate_fn=self.collate_fn) if self.test_dataset is not None else None
 
 
